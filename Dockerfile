@@ -1,5 +1,7 @@
 FROM golang:1.20-alpine AS builder
 
+LABEL org.opencontainers.image.source=github.com/chand1012/pocketbase
+
 WORKDIR /pb
 
 COPY . .
