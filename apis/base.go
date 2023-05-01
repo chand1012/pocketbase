@@ -121,6 +121,10 @@ func InitApi(app core.App) (*echo.Echo, error) {
 		return nil, err
 	}
 
+	// note: it is after the OnBeforeServe hook to ensure that the implicit
+	// cache is after any user custom defined middlewares
+	e.Use(eagerRequestDataCache(app))
+
 	// catch all any route
 	api.Any("/*", func(c echo.Context) error {
 		return echo.ErrNotFound
@@ -176,6 +180,7 @@ func bindStaticAdminUI(app core.App, e *echo.Echo) error {
 		trailedAdminPath+"*",
 		echo.StaticDirectoryHandler(ui.DistDirFS, false),
 		installerRedirect(app),
+		uiCacheControl(),
 		middleware.Gzip(),
 	)
 
@@ -193,6 +198,20 @@ func updateTotalAdminsCache(app core.App) error {
 	app.Cache().Set(totalAdminsCacheKey, total)
 
 	return nil
+}
+
+func uiCacheControl() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			// add default Cache-Control header for all Admin UI resources
+			// (ignoring the root admin path)
+			if c.Request().URL.Path != trailedAdminPath {
+				c.Response().Header().Set("Cache-Control", "max-age=1209600, stale-while-revalidate=86400")
+			}
+
+			return next(c)
+		}
+	}
 }
 
 // installerRedirect redirects the user to the installer admin UI page

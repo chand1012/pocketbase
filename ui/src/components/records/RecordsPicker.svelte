@@ -132,8 +132,10 @@
         try {
             const page = reset ? 1 : currentPage + 1;
 
+            const fallbackSearchFields = CommonHelper.getAllCollectionIdentifiers(collection);
+
             const result = await ApiClient.collection(collectionId).getList(page, batchSize, {
-                filter: filter,
+                filter: CommonHelper.normalizeSearchFilter(filter, fallbackSearchFields),
                 sort: !collection?.$isView ? "-created" : "",
                 $cancelKey: uniqueId + "loadList",
             });
@@ -308,7 +310,7 @@
             <span class="txt">Cancel</span>
         </button>
         <button type="button" class="btn" on:click={() => save()}>
-            <span class="txt">Save selection</span>
+            <span class="txt">Set selection</span>
         </button>
     </svelte:fragment>
 </OverlayPanel>
