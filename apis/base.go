@@ -14,6 +14,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/rest"
 	"github.com/pocketbase/pocketbase/ui"
 	"github.com/spf13/cast"
 )
@@ -25,6 +26,9 @@ const trailedAdminPath = "/_/"
 func InitApi(app core.App) (*echo.Echo, error) {
 	e := echo.New()
 	e.Debug = app.IsDebug()
+	e.JSONSerializer = &rest.Serializer{
+		FieldsParam: "fields",
+	}
 
 	// configure a custom router
 	e.ResetRouterCreator(func(ec *echo.Echo) echo.Router {
@@ -100,7 +104,7 @@ func InitApi(app core.App) (*echo.Echo, error) {
 	bindStaticAdminUI(app, e)
 
 	// default routes
-	api := e.Group("/api")
+	api := e.Group("/api", eagerRequestDataCache(app))
 	bindSettingsApi(app, api)
 	bindAdminApi(app, api)
 	bindCollectionApi(app, api)
@@ -110,6 +114,7 @@ func InitApi(app core.App) (*echo.Echo, error) {
 	bindRealtimeApi(app, api)
 	bindLogsApi(app, api)
 	bindHealthApi(app, api)
+	bindBackupApi(app, api)
 
 	// trigger the custom BeforeServe hook for the created api router
 	// allowing users to further adjust its options or register new routes
@@ -120,10 +125,6 @@ func InitApi(app core.App) (*echo.Echo, error) {
 	if err := app.OnBeforeServe().Trigger(serveEvent); err != nil {
 		return nil, err
 	}
-
-	// note: it is after the OnBeforeServe hook to ensure that the implicit
-	// cache is after any user custom defined middlewares
-	e.Use(eagerRequestDataCache(app))
 
 	// catch all any route
 	api.Any("/*", func(c echo.Context) error {
@@ -187,7 +188,7 @@ func bindStaticAdminUI(app core.App, e *echo.Echo) error {
 	return nil
 }
 
-const totalAdminsCacheKey = "totalAdmins"
+const totalAdminsCacheKey = "@totalAdmins"
 
 func updateTotalAdminsCache(app core.App) error {
 	total, err := app.Dao().TotalAdmins()

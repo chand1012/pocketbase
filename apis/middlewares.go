@@ -129,14 +129,17 @@ func RequireAdminAuth() echo.MiddlewareFunc {
 func RequireAdminAuthOnlyIfAny(app core.App) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			admin, _ := c.Get(ContextAdminKey).(*models.Admin)
+			if admin != nil {
+				return next(c)
+			}
+
 			totalAdmins, err := app.Dao().TotalAdmins()
 			if err != nil {
 				return NewBadRequestError("Failed to fetch admins info.", err)
 			}
 
-			admin, _ := c.Get(ContextAdminKey).(*models.Admin)
-
-			if admin != nil || totalAdmins == 0 {
+			if totalAdmins == 0 {
 				return next(c)
 			}
 
@@ -368,15 +371,19 @@ func realUserIp(r *http.Request, fallbackIp string) string {
 		return ip
 	}
 
+	if ip := r.Header.Get("Fly-Client-IP"); ip != "" {
+		return ip
+	}
+
 	if ip := r.Header.Get("X-Real-IP"); ip != "" {
 		return ip
 	}
 
 	if ipsList := r.Header.Get("X-Forwarded-For"); ipsList != "" {
+		// extract the first non-empty leftmost-ish ip
 		ips := strings.Split(ipsList, ",")
-		// extract the rightmost ip
-		for i := len(ips) - 1; i >= 0; i-- {
-			ip := strings.TrimSpace(ips[i])
+		for _, ip := range ips {
+			ip = strings.TrimSpace(ip)
 			if ip != "" {
 				return ip
 			}
