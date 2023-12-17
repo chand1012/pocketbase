@@ -4,8 +4,8 @@ import "sync"
 
 // Store defines a concurrent safe in memory key-value data store.
 type Store[T any] struct {
-	mux  sync.RWMutex
 	data map[string]T
+	mux  sync.RWMutex
 }
 
 // New creates a new Store[T] instance with a shallow copy of the provided data (if any).
@@ -23,13 +23,14 @@ func (s *Store[T]) Reset(newData map[string]T) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
-	var clone = make(map[string]T, len(newData))
-
-	for k, v := range newData {
-		clone[k] = v
+	if len(newData) > 0 {
+		s.data = make(map[string]T, len(newData))
+		for k, v := range newData {
+			s.data[k] = v
+		}
+	} else {
+		s.data = make(map[string]T)
 	}
-
-	s.data = clone
 }
 
 // Length returns the current number of elements in the store.
@@ -108,7 +109,7 @@ func (s *Store[T]) Set(key string, value T) {
 //
 // This method is similar to Set() but **it will skip adding new elements**
 // to the store if the store length has reached the specified limit.
-// `false` is returned if maxAllowedElements limit is reached.
+// false is returned if maxAllowedElements limit is reached.
 func (s *Store[T]) SetIfLessThanLimit(key string, value T, maxAllowedElements int) bool {
 	s.mux.Lock()
 	defer s.mux.Unlock()

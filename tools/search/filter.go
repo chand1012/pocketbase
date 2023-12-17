@@ -1,25 +1,29 @@
 package search
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/ganigeorgiev/fexpr"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/tools/security"
 	"github.com/pocketbase/pocketbase/tools/store"
-	"github.com/pocketbase/pocketbase/tools/types"
 	"github.com/spf13/cast"
 )
 
 // FilterData is a filter expression string following the `fexpr` package grammar.
 //
+// The filter string can also contain dbx placeholder parameters (eg. "title = {:name}"),
+// that will be safely replaced and properly quoted inplace with the placeholderReplacements values.
+//
 // Example:
 //
-//	var filter FilterData = "id = null || (name = 'test' && status = true)"
+//	var filter FilterData = "id = null || (name = 'test' && status = true) || (total >= {:min} && total <= {:max})"
 //	resolver := search.NewSimpleFieldResolver("id", "name", "status")
-//	expr, err := filter.BuildExpr(resolver)
+//	expr, err := filter.BuildExpr(resolver, dbx.Params{"min": 100, "max": 200})
 type FilterData string
 
 // parsedFilterData holds a cache with previously parsed filter data expressions
@@ -27,24 +31,62 @@ type FilterData string
 var parsedFilterData = store.New(make(map[string][]fexpr.ExprGroup, 50))
 
 // BuildExpr parses the current filter data and returns a new db WHERE expression.
-func (f FilterData) BuildExpr(fieldResolver FieldResolver) (dbx.Expression, error) {
+//
+// The filter string can also contain dbx placeholder parameters (eg. "title = {:name}"),
+// that will be safely replaced and properly quoted inplace with the placeholderReplacements values.
+func (f FilterData) BuildExpr(
+	fieldResolver FieldResolver,
+	placeholderReplacements ...dbx.Params,
+) (dbx.Expression, error) {
 	raw := string(f)
+
+	// replace the placeholder params in the raw string filter
+	for _, p := range placeholderReplacements {
+		for key, value := range p {
+			var replacement string
+			switch v := value.(type) {
+			case nil:
+				replacement = "null"
+			case bool, float64, float32, int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8:
+				replacement = cast.ToString(v)
+			default:
+				replacement = cast.ToString(v)
+
+				// try to json serialize as fallback
+				if replacement == "" {
+					raw, _ := json.Marshal(v)
+					replacement = string(raw)
+				}
+
+				replacement = strconv.Quote(replacement)
+			}
+			raw = strings.ReplaceAll(raw, "{:"+key+"}", replacement)
+		}
+	}
+
 	if parsedFilterData.Has(raw) {
-		return f.build(parsedFilterData.Get(raw), fieldResolver)
+		return buildParsedFilterExpr(parsedFilterData.Get(raw), fieldResolver)
 	}
 	data, err := fexpr.Parse(raw)
 	if err != nil {
+		// depending on the users demand we may allow empty expressions
+		// (aka. expressions consisting only of whitespaces or comments)
+		// but for now disallow them as it seems unnecessary
+		// if errors.Is(err, fexpr.ErrEmpty) {
+		// return dbx.NewExp("1=1"), nil
+		// }
+
 		return nil, err
 	}
 	// store in cache
 	// (the limit size is arbitrary and it is there to prevent the cache growing too big)
 	parsedFilterData.SetIfLessThanLimit(raw, data, 500)
-	return f.build(data, fieldResolver)
+	return buildParsedFilterExpr(data, fieldResolver)
 }
 
-func (f FilterData) build(data []fexpr.ExprGroup, fieldResolver FieldResolver) (dbx.Expression, error) {
+func buildParsedFilterExpr(data []fexpr.ExprGroup, fieldResolver FieldResolver) (dbx.Expression, error) {
 	if len(data) == 0 {
-		return nil, errors.New("Empty filter expression.")
+		return nil, errors.New("empty filter expression")
 	}
 
 	result := &concatExpr{separator: " "}
@@ -55,13 +97,13 @@ func (f FilterData) build(data []fexpr.ExprGroup, fieldResolver FieldResolver) (
 
 		switch item := group.Item.(type) {
 		case fexpr.Expr:
-			expr, exprErr = f.resolveTokenizedExpr(item, fieldResolver)
+			expr, exprErr = resolveTokenizedExpr(item, fieldResolver)
 		case fexpr.ExprGroup:
-			expr, exprErr = f.build([]fexpr.ExprGroup{item}, fieldResolver)
+			expr, exprErr = buildParsedFilterExpr([]fexpr.ExprGroup{item}, fieldResolver)
 		case []fexpr.ExprGroup:
-			expr, exprErr = f.build(item, fieldResolver)
+			expr, exprErr = buildParsedFilterExpr(item, fieldResolver)
 		default:
-			exprErr = errors.New("Unsupported expression item.")
+			exprErr = errors.New("unsupported expression item")
 		}
 
 		if exprErr != nil {
@@ -84,7 +126,7 @@ func (f FilterData) build(data []fexpr.ExprGroup, fieldResolver FieldResolver) (
 	return result, nil
 }
 
-func (f FilterData) resolveTokenizedExpr(expr fexpr.Expr, fieldResolver FieldResolver) (dbx.Expression, error) {
+func resolveTokenizedExpr(expr fexpr.Expr, fieldResolver FieldResolver) (dbx.Expression, error) {
 	lResult, lErr := resolveToken(expr.Left, fieldResolver)
 	if lErr != nil || lResult.Identifier == "" {
 		return nil, fmt.Errorf("invalid left operand %q - %v", expr.Left.Literal, lErr)
@@ -95,10 +137,10 @@ func (f FilterData) resolveTokenizedExpr(expr fexpr.Expr, fieldResolver FieldRes
 		return nil, fmt.Errorf("invalid right operand %q - %v", expr.Right.Literal, rErr)
 	}
 
-	return buildExpr(lResult, expr.Op, rResult)
+	return buildResolversExpr(lResult, expr.Op, rResult)
 }
 
-func buildExpr(
+func buildResolversExpr(
 	left *ResolverResult,
 	op fexpr.SignOp,
 	right *ResolverResult,
@@ -182,14 +224,19 @@ func buildExpr(
 func resolveToken(token fexpr.Token, fieldResolver FieldResolver) (*ResolverResult, error) {
 	switch token.Type {
 	case fexpr.TokenIdentifier:
-		// current datetime constant
+		// check for macros
 		// ---
-		if token.Literal == "@now" {
+		if macroFunc, ok := identifierMacros[token.Literal]; ok {
 			placeholder := "t" + security.PseudorandomString(5)
+
+			macroValue, err := macroFunc()
+			if err != nil {
+				return nil, err
+			}
 
 			return &ResolverResult{
 				Identifier: "{:" + placeholder + "}",
-				Params:     dbx.Params{placeholder: types.NowDateTime().String()},
+				Params:     dbx.Params{placeholder: macroValue},
 			}, nil
 		}
 
@@ -246,7 +293,10 @@ func resolveEqualExpr(equal bool, left, right *ResolverResult) dbx.Expression {
 	concatOp := "OR"
 	nullExpr := "IS NULL"
 	if !equal {
-		equalOp = "!="
+		// use `IS NOT` instead of `!=` because direct non-equal comparisons
+		// to nullable column values that are actually NULL yields to NULL instead of TRUE, eg.:
+		// `'example' != nullableColumn` -> NULL even if nullableColumn row value is NULL
+		equalOp = "IS NOT"
 		concatOp = "AND"
 		nullExpr = "IS NOT NULL"
 	}
@@ -274,7 +324,7 @@ func resolveEqualExpr(equal bool, left, right *ResolverResult) dbx.Expression {
 	}
 
 	// "" = b OR b IS NULL
-	// "" != b AND b IS NOT NULL
+	// "" IS NOT b AND b IS NOT NULL
 	if isLeftEmpty {
 		return dbx.NewExp(
 			fmt.Sprintf("('' %s %s %s %s %s)", equalOp, right.Identifier, concatOp, right.Identifier, nullExpr),
@@ -283,7 +333,7 @@ func resolveEqualExpr(equal bool, left, right *ResolverResult) dbx.Expression {
 	}
 
 	// a = "" OR a IS NULL
-	// a != "" AND a IS NOT NULL
+	// a IS NOT "" AND a IS NOT NULL
 	if isRightEmpty {
 		return dbx.NewExp(
 			fmt.Sprintf("(%s %s '' %s %s %s)", left.Identifier, equalOp, concatOp, left.Identifier, nullExpr),
@@ -469,7 +519,7 @@ func (e *manyVsManyExpr) Build(db *dbx.DB, params dbx.Params) string {
 	lAlias := "__ml" + security.PseudorandomString(5)
 	rAlias := "__mr" + security.PseudorandomString(5)
 
-	whereExpr, buildErr := buildExpr(
+	whereExpr, buildErr := buildResolversExpr(
 		&ResolverResult{
 			Identifier: "[[" + lAlias + ".multiMatchValue]]",
 		},
@@ -536,9 +586,9 @@ func (e *manyVsOneExpr) Build(db *dbx.DB, params dbx.Params) string {
 	var buildErr error
 
 	if e.inverse {
-		whereExpr, buildErr = buildExpr(r2, e.op, r1)
+		whereExpr, buildErr = buildResolversExpr(r2, e.op, r1)
 	} else {
-		whereExpr, buildErr = buildExpr(r1, e.op, r2)
+		whereExpr, buildErr = buildResolversExpr(r1, e.op, r2)
 	}
 
 	if buildErr != nil {

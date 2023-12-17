@@ -63,15 +63,17 @@ func TestRecordDataValidatorValidateText(t *testing.T) {
 			Name:     "field2",
 			Required: true,
 			Type:     schema.FieldTypeText,
+			Options: &schema.TextOptions{
+				Pattern: pattern,
+			},
 		},
 		&schema.SchemaField{
 			Name:   "field3",
 			Unique: true,
 			Type:   schema.FieldTypeText,
 			Options: &schema.TextOptions{
-				Min:     &min,
-				Max:     &max,
-				Pattern: pattern,
+				Min: &min,
+				Max: &max,
 			},
 		},
 	)
@@ -110,6 +112,16 @@ func TestRecordDataValidatorValidateText(t *testing.T) {
 			[]string{"field3"},
 		},
 		{
+			"(text) check min constraint with multi-bytes char",
+			map[string]any{
+				"field1": "test",
+				"field2": "test",
+				"field3": "𝌆", // 4 bytes should be counted as 1 char
+			},
+			nil,
+			[]string{"field3"},
+		},
+		{
 			"(text) check max constraint",
 			map[string]any{
 				"field1": "test",
@@ -120,14 +132,24 @@ func TestRecordDataValidatorValidateText(t *testing.T) {
 			[]string{"field3"},
 		},
 		{
+			"(text) check max constraint with multi-bytes chars",
+			map[string]any{
+				"field1": "test",
+				"field2": "test",
+				"field3": strings.Repeat("𝌆", max), // shouldn't exceed the max limit even though max*4bytes chars are used
+			},
+			nil,
+			[]string{},
+		},
+		{
 			"(text) check pattern constraint",
 			map[string]any{
 				"field1": nil,
-				"field2": "test",
-				"field3": "test!",
+				"field2": "test!",
+				"field3": "test",
 			},
 			nil,
-			[]string{"field3"},
+			[]string{"field2"},
 		},
 		{
 			"(text) valid data (only required)",
@@ -180,6 +202,13 @@ func TestRecordDataValidatorValidateNumber(t *testing.T) {
 				Max: &max,
 			},
 		},
+		&schema.SchemaField{
+			Name: "field4",
+			Type: schema.FieldTypeNumber,
+			Options: &schema.NumberOptions{
+				NoDecimal: true,
+			},
+		},
 	)
 	if err := app.Dao().SaveCollection(collection); err != nil {
 		t.Fatal(err)
@@ -201,6 +230,7 @@ func TestRecordDataValidatorValidateNumber(t *testing.T) {
 				"field1": nil,
 				"field2": nil,
 				"field3": nil,
+				"field4": nil,
 			},
 			nil,
 			[]string{"field2"},
@@ -211,6 +241,7 @@ func TestRecordDataValidatorValidateNumber(t *testing.T) {
 				"field1": "invalid",
 				"field2": "invalid",
 				"field3": "invalid",
+				"field4": "invalid",
 			},
 			nil,
 			[]string{"field2"},
@@ -245,6 +276,15 @@ func TestRecordDataValidatorValidateNumber(t *testing.T) {
 			[]string{"field3"},
 		},
 		{
+			"(number) check NoDecimal",
+			map[string]any{
+				"field2": 1,
+				"field4": 456.789,
+			},
+			nil,
+			[]string{"field4"},
+		},
+		{
 			"(number) valid data (only required)",
 			map[string]any{
 				"field2": 1,
@@ -258,6 +298,7 @@ func TestRecordDataValidatorValidateNumber(t *testing.T) {
 				"field1": nil,
 				"field2": 123, // test value cast
 				"field3": max,
+				"field4": 456,
 			},
 			nil,
 			[]string{},
@@ -821,16 +862,25 @@ func TestRecordDataValidatorValidateJson(t *testing.T) {
 		&schema.SchemaField{
 			Name: "field1",
 			Type: schema.FieldTypeJson,
+			Options: &schema.JsonOptions{
+				MaxSize: 10,
+			},
 		},
 		&schema.SchemaField{
 			Name:     "field2",
 			Required: true,
 			Type:     schema.FieldTypeJson,
+			Options: &schema.JsonOptions{
+				MaxSize: 9999,
+			},
 		},
 		&schema.SchemaField{
 			Name:   "field3",
 			Unique: true,
 			Type:   schema.FieldTypeJson,
+			Options: &schema.JsonOptions{
+				MaxSize: 9999,
+			},
 		},
 	)
 	if err := app.Dao().SaveCollection(collection); err != nil {
@@ -898,6 +948,15 @@ func TestRecordDataValidatorValidateJson(t *testing.T) {
 			[]string{"field2"},
 		},
 		{
+			"(json) check MaxSize constraint",
+			map[string]any{
+				"field1": `"123456789"`, // max 10bytes
+				"field2": 123,
+			},
+			nil,
+			[]string{"field1"},
+		},
+		{
 			"(json) check json text invalid obj, array and number normalizations",
 			map[string]any{
 				"field1": `[1 2 3]`,
@@ -928,9 +987,9 @@ func TestRecordDataValidatorValidateJson(t *testing.T) {
 		{
 			"(json) valid data - all fields with normalizations",
 			map[string]any{
-				"field1": []string{"a", "b", "c"},
+				"field1": `"12345678"`,
 				"field2": 123,
-				"field3": `"test"`,
+				"field3": []string{"a", "b", "c"},
 			},
 			nil,
 			[]string{},
@@ -1232,29 +1291,30 @@ func TestRecordDataValidatorValidateRelation(t *testing.T) {
 
 func checkValidatorErrors(t *testing.T, dao *daos.Dao, record *models.Record, scenarios []testDataFieldScenario) {
 	for i, s := range scenarios {
-		validator := validators.NewRecordDataValidator(dao, record, s.files)
-		result := validator.Validate(s.data)
-
-		prefix := fmt.Sprintf("%d", i)
-		if s.name != "" {
-			prefix = s.name
+		prefix := s.name
+		if prefix == "" {
+			prefix = fmt.Sprintf("%d", i)
 		}
 
-		// parse errors
-		errs, ok := result.(validation.Errors)
-		if !ok && result != nil {
-			t.Errorf("[%s] Failed to parse errors %v", prefix, result)
-			continue
-		}
+		t.Run(prefix, func(t *testing.T) {
+			validator := validators.NewRecordDataValidator(dao, record, s.files)
+			result := validator.Validate(s.data)
 
-		// check errors
-		if len(errs) > len(s.expectedErrors) {
-			t.Errorf("[%s] Expected error keys %v, got %v", prefix, s.expectedErrors, errs)
-		}
-		for _, k := range s.expectedErrors {
-			if _, ok := errs[k]; !ok {
-				t.Errorf("[%s] Missing expected error key %q in %v", prefix, k, errs)
+			// parse errors
+			errs, ok := result.(validation.Errors)
+			if !ok && result != nil {
+				t.Fatalf("Failed to parse errors %v", result)
 			}
-		}
+
+			// check errors
+			if len(errs) > len(s.expectedErrors) {
+				t.Fatalf("Expected error keys %v, got %v", s.expectedErrors, errs)
+			}
+			for _, k := range s.expectedErrors {
+				if _, ok := errs[k]; !ok {
+					t.Fatalf("Missing expected error key %q in %v", k, errs)
+				}
+			}
+		})
 	}
 }

@@ -1,6 +1,9 @@
 package core
 
 import (
+	"net/http"
+	"time"
+
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/daos"
 	"github.com/pocketbase/pocketbase/models"
@@ -12,6 +15,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/mailer"
 	"github.com/pocketbase/pocketbase/tools/search"
 	"github.com/pocketbase/pocketbase/tools/subscriptions"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 var (
@@ -66,12 +70,15 @@ type BootstrapEvent struct {
 }
 
 type TerminateEvent struct {
-	App App
+	App       App
+	IsRestart bool
 }
 
 type ServeEvent struct {
-	App    App
-	Router *echo.Echo
+	App         App
+	Router      *echo.Echo
+	Server      *http.Server
+	CertManager *autocert.Manager
 }
 
 type ApiErrorEvent struct {
@@ -116,6 +123,7 @@ type MailerAdminEvent struct {
 type RealtimeConnectEvent struct {
 	HttpContext echo.Context
 	Client      subscriptions.Client
+	IdleTimeout time.Duration
 }
 
 type RealtimeDisconnectEvent struct {

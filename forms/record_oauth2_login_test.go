@@ -23,13 +23,13 @@ func TestUserOauth2LoginValidate(t *testing.T) {
 			"empty payload",
 			"users",
 			"{}",
-			[]string{"provider", "code", "codeVerifier", "redirectUrl"},
+			[]string{"provider", "code", "redirectUrl"},
 		},
 		{
 			"empty data",
 			"users",
 			`{"provider":"","code":"","codeVerifier":"","redirectUrl":""}`,
-			[]string{"provider", "code", "codeVerifier", "redirectUrl"},
+			[]string{"provider", "code", "redirectUrl"},
 		},
 		{
 			"missing provider",
@@ -47,6 +47,12 @@ func TestUserOauth2LoginValidate(t *testing.T) {
 			"enabled provider",
 			"users",
 			`{"provider":"gitlab","code":"123","codeVerifier":"123","redirectUrl":"https://example.com"}`,
+			[]string{},
+		},
+		{
+			"[#3689] any redirectUrl value",
+			"users",
+			`{"provider":"gitlab","code":"123","codeVerifier":"123","redirectUrl":"something"}`,
 			[]string{},
 		},
 	}

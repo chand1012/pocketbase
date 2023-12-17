@@ -1,23 +1,48 @@
 <script>
+    import CommonHelper from "@/utils/CommonHelper";
+    import tooltip from "@/actions/tooltip";
     import Field from "@/components/base/Field.svelte";
 
     export let key = "";
     export let config = {};
+
+    if (CommonHelper.isEmpty(config.pkce)) {
+        config.pkce = true;
+    }
+
+    if (!config.displayName) {
+        config.displayName = "OIDC";
+    }
 </script>
 
+<Field class="form-field required" name="{key}.displayName" let:uniqueId>
+    <label for={uniqueId}>Display name</label>
+    <input type="text" id={uniqueId} bind:value={config.displayName} required />
+</Field>
+
 <div class="section-title">Endpoints</div>
-<Field class="form-field {config.enabled ? 'required' : ''}" name="{key}.authUrl" let:uniqueId>
+<Field class="form-field required" name="{key}.authUrl" let:uniqueId>
     <label for={uniqueId}>Auth URL</label>
-    <input type="url" id={uniqueId} bind:value={config.authUrl} required={config.enabled} />
-    <div class="help-block">Eg. https://example.com/authorize/</div>
+    <input type="url" id={uniqueId} bind:value={config.authUrl} required />
 </Field>
-<Field class="form-field {config.enabled ? 'required' : ''}" name="{key}.tokenUrl" let:uniqueId>
+<Field class="form-field required" name="{key}.tokenUrl" let:uniqueId>
     <label for={uniqueId}>Token URL</label>
-    <input type="url" id={uniqueId} bind:value={config.tokenUrl} required={config.enabled} />
-    <div class="help-block">Eg. https://example.com/token/</div>
+    <input type="url" id={uniqueId} bind:value={config.tokenUrl} required />
 </Field>
-<Field class="form-field {config.enabled ? 'required' : ''}" name="{key}.userApiUrl" let:uniqueId>
+<Field class="form-field required" name="{key}.userApiUrl" let:uniqueId>
     <label for={uniqueId}>User API URL</label>
-    <input type="url" id={uniqueId} bind:value={config.userApiUrl} required={config.enabled} />
-    <div class="help-block">Eg. https://example.com/userinfo/</div>
+    <input type="url" id={uniqueId} bind:value={config.userApiUrl} required />
+</Field>
+<Field class="form-field" name="{key}.pkce" let:uniqueId>
+    <input type="checkbox" id={uniqueId} bind:checked={config.pkce} />
+    <label for={uniqueId}>
+        <span class="txt">Support PKCE</span>
+        <i
+            class="ri-information-line link-hint"
+            use:tooltip={{
+                text: "Usually it should be safe to be always enabled as most providers will just ignore the extra query parameters if they don't support PKCE.",
+                position: "right",
+            }}
+        />
+    </label>
 </Field>

@@ -1,11 +1,10 @@
 <script>
-    import { Collection } from "pocketbase";
     import ApiClient from "@/utils/ApiClient";
     import CommonHelper from "@/utils/CommonHelper";
     import CodeBlock from "@/components/base/CodeBlock.svelte";
     import SdkTabs from "@/components/collections/docs/SdkTabs.svelte";
 
-    export let collection = new Collection();
+    export let collection;
 
     let responseTab = 204;
     let responses = [];
@@ -38,6 +37,10 @@
 <h3 class="m-b-sm">Confirm password reset ({collection.name})</h3>
 <div class="content txt-lg m-b-sm">
     <p>Confirms <strong>{collection.name}</strong> password reset request and sets a new password.</p>
+    <p>
+        After this request all previously issued tokens for the specific record will be automatically
+        invalidated.
+    </p>
 </div>
 
 <SdkTabs
@@ -48,11 +51,17 @@
 
         ...
 
+        let oldAuth = pb.authStore.model;
+
         await pb.collection('${collection?.name}').confirmPasswordReset(
             'TOKEN',
             'NEW_PASSWORD',
             'NEW_PASSWORD_CONFIRM',
         );
+
+        // reauthenticate if needed
+        // (after the above call all previously issued tokens are invalidated)
+        await pb.collection('${collection?.name}').authWithPassword(oldAuth.email, 'NEW_PASSWORD');
     `}
     dart={`
         import 'package:pocketbase/pocketbase.dart';
@@ -61,11 +70,17 @@
 
         ...
 
+        final oldAuth = pb.authStore.model;
+
         await pb.collection('${collection?.name}').confirmPasswordReset(
           'TOKEN',
           'NEW_PASSWORD',
           'NEW_PASSWORD_CONFIRM',
         );
+
+        // reauthenticate if needed
+        // (after the above call all previously issued tokens are invalidated)
+        await pb.collection('${collection?.name}').authWithPassword(oldAuth.email, 'NEW_PASSWORD');
     `}
 />
 
@@ -130,7 +145,7 @@
 
 <div class="section-title">Responses</div>
 <div class="tabs">
-    <div class="tabs-header compact left">
+    <div class="tabs-header compact combined left">
         {#each responses as response (response.code)}
             <button
                 class="tab-item"

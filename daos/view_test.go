@@ -147,34 +147,33 @@ func TestSaveView(t *testing.T) {
 	}
 
 	for _, s := range scenarios {
-		err := app.Dao().SaveView(s.viewName, s.query)
+		t.Run(s.scenarioName, func(t *testing.T) {
+			err := app.Dao().SaveView(s.viewName, s.query)
 
-		hasErr := err != nil
-		if hasErr != s.expectError {
-			t.Errorf("[%s] Expected hasErr %v, got %v (%v)", s.scenarioName, s.expectError, hasErr, err)
-			continue
-		}
-
-		if hasErr {
-			continue
-		}
-
-		infoRows, err := app.Dao().TableInfo(s.viewName)
-		if err != nil {
-			t.Errorf("[%s] Failed to fetch table info for %s: %v", s.scenarioName, s.viewName, err)
-			continue
-		}
-
-		if len(s.expectColumns) != len(infoRows) {
-			t.Errorf("[%s] Expected %d columns, got %d", s.scenarioName, len(s.expectColumns), len(infoRows))
-			continue
-		}
-
-		for _, row := range infoRows {
-			if !list.ExistInSlice(row.Name, s.expectColumns) {
-				t.Errorf("[%s] Missing %q column in %v", s.scenarioName, row.Name, s.expectColumns)
+			hasErr := err != nil
+			if hasErr != s.expectError {
+				t.Fatalf("Expected hasErr %v, got %v (%v)", s.expectError, hasErr, err)
 			}
-		}
+
+			if hasErr {
+				return
+			}
+
+			infoRows, err := app.Dao().TableInfo(s.viewName)
+			if err != nil {
+				t.Fatalf("Failed to fetch table info for %s: %v", s.viewName, err)
+			}
+
+			if len(s.expectColumns) != len(infoRows) {
+				t.Fatalf("Expected %d columns, got %d", len(s.expectColumns), len(infoRows))
+			}
+
+			for _, row := range infoRows {
+				if !list.ExistInSlice(row.Name, s.expectColumns) {
+					t.Fatalf("Missing %q column in %v", row.Name, s.expectColumns)
+				}
+			}
+		})
 	}
 
 	ensureNoTempViews(app, t)
@@ -272,24 +271,26 @@ func TestCreateViewSchema(t *testing.T) {
 					"datetime",
 					"json",
 					"rel_one",
-					"rel_many"
+					"rel_many",
+					'single_quoted_custom_literal' as 'single_quoted_column'
 				from demo1
 			`,
 			false,
 			map[string]string{
-				"text":         schema.FieldTypeText,
-				"bool":         schema.FieldTypeBool,
-				"url":          schema.FieldTypeUrl,
-				"select_one":   schema.FieldTypeSelect,
-				"select_many":  schema.FieldTypeSelect,
-				"file_one":     schema.FieldTypeFile,
-				"file_many":    schema.FieldTypeFile,
-				"number_alias": schema.FieldTypeNumber,
-				"email":        schema.FieldTypeEmail,
-				"datetime":     schema.FieldTypeDate,
-				"json":         schema.FieldTypeJson,
-				"rel_one":      schema.FieldTypeRelation,
-				"rel_many":     schema.FieldTypeRelation,
+				"text":                 schema.FieldTypeText,
+				"bool":                 schema.FieldTypeBool,
+				"url":                  schema.FieldTypeUrl,
+				"select_one":           schema.FieldTypeSelect,
+				"select_many":          schema.FieldTypeSelect,
+				"file_one":             schema.FieldTypeFile,
+				"file_many":            schema.FieldTypeFile,
+				"number_alias":         schema.FieldTypeNumber,
+				"email":                schema.FieldTypeEmail,
+				"datetime":             schema.FieldTypeDate,
+				"json":                 schema.FieldTypeJson,
+				"rel_one":              schema.FieldTypeRelation,
+				"rel_many":             schema.FieldTypeRelation,
+				"single_quoted_column": schema.FieldTypeJson,
 			},
 		},
 		{
@@ -330,7 +331,7 @@ func TestCreateViewSchema(t *testing.T) {
 			},
 		},
 		{
-			"query with numeric casts",
+			"query with casts",
 			`select
 				a.id,
 				count(a.id) count,
@@ -339,6 +340,9 @@ func TestCreateViewSchema(t *testing.T) {
 				cast(a.id as real) cast_real,
 				cast(a.id as decimal) cast_decimal,
 				cast(a.id as numeric) cast_numeric,
+				cast(a.id as text) cast_text,
+				cast(a.id as bool) cast_bool,
+				cast(a.id as boolean) cast_boolean,
 				avg(a.id) avg,
 				sum(a.id) sum,
 				total(a.id) total,
@@ -354,6 +358,9 @@ func TestCreateViewSchema(t *testing.T) {
 				"cast_real":    schema.FieldTypeNumber,
 				"cast_decimal": schema.FieldTypeNumber,
 				"cast_numeric": schema.FieldTypeNumber,
+				"cast_text":    schema.FieldTypeText,
+				"cast_bool":    schema.FieldTypeBool,
+				"cast_boolean": schema.FieldTypeBool,
 				// json because they are nullable
 				"sum": schema.FieldTypeJson,
 				"avg": schema.FieldTypeJson,

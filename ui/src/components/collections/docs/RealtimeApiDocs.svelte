@@ -1,11 +1,10 @@
 <script>
-    import { Collection } from "pocketbase";
     import ApiClient from "@/utils/ApiClient";
     import CommonHelper from "@/utils/CommonHelper";
     import CodeBlock from "@/components/base/CodeBlock.svelte";
     import SdkTabs from "@/components/collections/docs/SdkTabs.svelte";
 
-    export let collection = new Collection();
+    export let collection;
 
     $: backendAbsUrl = CommonHelper.getApiExampleUrl(ApiClient.baseUrl);
 </script>
@@ -52,13 +51,15 @@
 
         // Subscribe to changes in any ${collection?.name} record
         pb.collection('${collection?.name}').subscribe('*', function (e) {
+            console.log(e.action);
             console.log(e.record);
-        });
+        }, { /* other options like expand, custom headers, etc. */ });
 
         // Subscribe to changes only in the specified record
         pb.collection('${collection?.name}').subscribe('RECORD_ID', function (e) {
+            console.log(e.action);
             console.log(e.record);
-        });
+        }, { /* other options like expand, custom headers, etc. */ });
 
         // Unsubscribe
         pb.collection('${collection?.name}').unsubscribe('RECORD_ID'); // remove all 'RECORD_ID' subscriptions
@@ -77,13 +78,15 @@
 
         // Subscribe to changes in any ${collection?.name} record
         pb.collection('${collection?.name}').subscribe('*', (e) {
+            print(e.action);
             print(e.record);
-        });
+        }, /* other options like expand, custom headers, etc. */);
 
         // Subscribe to changes only in the specified record
         pb.collection('${collection?.name}').subscribe('RECORD_ID', (e) {
+            print(e.action);
             print(e.record);
-        });
+        }, /* other options like expand, custom headers, etc. */);
 
         // Unsubscribe
         pb.collection('${collection?.name}').unsubscribe('RECORD_ID'); // remove all 'RECORD_ID' subscriptions

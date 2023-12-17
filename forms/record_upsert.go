@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -25,7 +25,7 @@ import (
 )
 
 // username value regex pattern
-var usernameRegex = regexp.MustCompile(`^[\w][\w\.]*$`)
+var usernameRegex = regexp.MustCompile(`^[\w][\w\.\-]*$`)
 
 // RecordUpsert is a [models.Record] upsert (create/update) form.
 type RecordUpsert struct {
@@ -200,8 +200,12 @@ func (form *RecordUpsert) extractMultipartFormData(
 
 		files, err := rest.FindUploadedFiles(r, fullKey)
 		if err != nil || len(files) == 0 {
-			if err != nil && err != http.ErrMissingFile && form.app.IsDebug() {
-				log.Printf("%q uploaded file error: %v\n", fullKey, err)
+			if err != nil && err != http.ErrMissingFile {
+				form.app.Logger().Debug(
+					"Uploaded file error",
+					slog.String("key", fullKey),
+					slog.String("error", err.Error()),
+				)
 			}
 
 			// skip invalid or missing file(s)
@@ -744,36 +748,44 @@ func (form *RecordUpsert) Submit(interceptors ...InterceptorFunc[*models.Record]
 
 		// upload new files (if any)
 		//
-		// note: executed after the default BeforeCreateFunc and BeforeUpdateFunc hooks
+		// note: executed after the default BeforeCreateFunc and BeforeUpdateFunc hook actions
 		// to allow uploading AFTER the before app model hooks (eg. in case of an id change)
 		// but BEFORE the actual record db persistence
 		// ---
-		dao.BeforeCreateFunc = func(eventDao *daos.Dao, m models.Model) error {
-			if form.dao.BeforeCreateFunc != nil {
-				if err := form.dao.BeforeCreateFunc(eventDao, m); err != nil {
-					return err
+		dao.BeforeCreateFunc = func(eventDao *daos.Dao, m models.Model, action func() error) error {
+			newAction := func() error {
+				if m.TableName() == form.record.TableName() && m.GetId() == form.record.GetId() {
+					if err := form.processFilesToUpload(); err != nil {
+						return err
+					}
 				}
+
+				return action()
 			}
 
-			if m.TableName() == form.record.TableName() && m.GetId() == form.record.GetId() {
-				return form.processFilesToUpload()
+			if form.dao.BeforeCreateFunc != nil {
+				return form.dao.BeforeCreateFunc(eventDao, m, newAction)
 			}
 
-			return nil
+			return newAction()
 		}
 
-		dao.BeforeUpdateFunc = func(eventDao *daos.Dao, m models.Model) error {
-			if form.dao.BeforeUpdateFunc != nil {
-				if err := form.dao.BeforeUpdateFunc(eventDao, m); err != nil {
-					return err
+		dao.BeforeUpdateFunc = func(eventDao *daos.Dao, m models.Model, action func() error) error {
+			newAction := func() error {
+				if m.TableName() == form.record.TableName() && m.GetId() == form.record.GetId() {
+					if err := form.processFilesToUpload(); err != nil {
+						return err
+					}
 				}
+
+				return action()
 			}
 
-			if m.TableName() == form.record.TableName() && m.GetId() == form.record.GetId() {
-				return form.processFilesToUpload()
+			if form.dao.BeforeUpdateFunc != nil {
+				return form.dao.BeforeUpdateFunc(eventDao, m, newAction)
 			}
 
-			return nil
+			return newAction()
 		}
 		// ---
 
@@ -786,8 +798,11 @@ func (form *RecordUpsert) Submit(interceptors ...InterceptorFunc[*models.Record]
 		//
 		// for now fail silently to avoid reupload when `form.Submit()`
 		// is called manually (aka. not from an api request)...
-		if err := form.processFilesToDelete(); err != nil && form.app.IsDebug() {
-			log.Println(err)
+		if err := form.processFilesToDelete(); err != nil {
+			form.app.Logger().Debug(
+				"Failed to delete old files",
+				slog.String("error", err.Error()),
+			)
 		}
 
 		return nil

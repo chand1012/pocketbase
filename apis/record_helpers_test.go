@@ -13,7 +13,7 @@ import (
 	"github.com/pocketbase/pocketbase/tests"
 )
 
-func TestRequestData(t *testing.T) {
+func TestRequestInfo(t *testing.T) {
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/?test=123", strings.NewReader(`{"test":456}`))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -29,10 +29,10 @@ func TestRequestData(t *testing.T) {
 	dummyAdmin.Id = "id2"
 	c.Set(apis.ContextAdminKey, dummyAdmin)
 
-	result := apis.RequestData(c)
+	result := apis.RequestInfo(c)
 
 	if result == nil {
-		t.Fatal("Expected *models.RequestData instance, got nil")
+		t.Fatal("Expected *models.RequestInfo instance, got nil")
 	}
 
 	if result.Method != http.MethodPost {
@@ -83,6 +83,11 @@ func TestRecordAuthResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	unverfiedAuthRecord, err := app.Dao().FindRecordById("clients", "o1y0dd0spd786md")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	scenarios := []struct {
 		name               string
 		record             *models.Record
@@ -95,6 +100,11 @@ func TestRecordAuthResponse(t *testing.T) {
 		{
 			name:        "non auth record",
 			record:      nonAuthRecord,
+			expectError: true,
+		},
+		{
+			name:        "valid auth record but with unverified email in onlyVerified collection",
+			record:      unverfiedAuthRecord,
 			expectError: true,
 		},
 		{

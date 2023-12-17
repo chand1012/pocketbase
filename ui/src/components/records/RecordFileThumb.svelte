@@ -11,7 +11,7 @@
     let thumbUrl = "";
     let originalUrl = "";
     let token = "";
-    let isLoadingToken = false;
+    let isLoadingToken = true;
 
     loadFileToken();
 
@@ -65,6 +65,7 @@
                 src={thumbUrl}
                 alt={filename}
                 title="Preview {filename}"
+                loading="lazy"
                 on:error={onError}
             />
         {:else if type === "video" || type === "audio"}
@@ -75,4 +76,6 @@
     </a>
 {/if}
 
-<PreviewPopup bind:this={previewPopup} />
+{#if hasPreview}
+    <PreviewPopup bind:this={previewPopup} />
+{/if}

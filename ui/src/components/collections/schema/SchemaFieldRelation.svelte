@@ -6,7 +6,7 @@
     import ObjectSelect from "@/components/base/ObjectSelect.svelte";
     import CollectionUpsertPanel from "@/components/collections/CollectionUpsertPanel.svelte";
     import SchemaField from "@/components/collections/schema/SchemaField.svelte";
-    import { collections, activeCollection } from "@/stores/collections";
+    import { collections } from "@/stores/collections";
 
     export let field;
     export let key = "";
@@ -21,15 +21,11 @@
         { label: "True", value: true },
     ];
 
-    const baseFields = ["id", "created", "updated"];
-
-    const authFields = ["username", "email", "emailVisibility", "verified"];
-
     let upsertPanel = null;
-    let displayFieldsList = [];
-    let oldCollectionId = null;
     let isSingle = field.options?.maxSelect == 1;
     let oldIsSingle = isSingle;
+
+    $: selectCollections = $collections.filter((c) => c.type != "view");
 
     // load defaults
     $: if (CommonHelper.isEmpty(field.options)) {
@@ -48,44 +44,14 @@
 
     $: selectedColection = $collections.find((c) => c.id == field.options.collectionId) || null;
 
-    $: if (oldCollectionId != field.options.collectionId) {
-        oldCollectionId = field.options.collectionId;
-        refreshDisplayFieldsList();
-    }
-
     function loadDefaults() {
         field.options = {
             maxSelect: 1,
             collectionId: null,
             cascadeDelete: false,
-            displayFields: [],
         };
         isSingle = true;
         oldIsSingle = isSingle;
-    }
-
-    function refreshDisplayFieldsList() {
-        displayFieldsList = baseFields.slice(0);
-        if (!selectedColection) {
-            return;
-        }
-
-        if (selectedColection.isAuth) {
-            displayFieldsList = displayFieldsList.concat(authFields);
-        }
-
-        for (const f of selectedColection.schema) {
-            displayFieldsList.push(f.name);
-        }
-
-        // deselect any missing display field
-        if (field.options?.displayFields?.length > 0) {
-            for (let i = field.options.displayFields.length - 1; i >= 0; i--) {
-                if (!displayFieldsList.includes(field.options.displayFields[i])) {
-                    field.options.displayFields.splice(i, 1);
-                }
-            }
-        }
     }
 </script>
 
@@ -101,11 +67,11 @@
         >
             <ObjectSelect
                 id={uniqueId}
-                searchable={$collections.length > 5}
+                searchable={selectCollections.length > 5}
                 selectPlaceholder={"Select collection *"}
                 noOptionsText="No collections found"
                 selectionKey="id"
-                items={$collections}
+                items={selectCollections}
                 readonly={!interactive || field.id}
                 bind:keyOfSelected={field.options.collectionId}
             >
@@ -172,40 +138,18 @@
                 </div>
             {/if}
 
-            <div class="col-sm-6">
-                <Field class="form-field" name="schema.{key}.options.displayFields" let:uniqueId>
-                    <label for={uniqueId}>
-                        <span class="txt">Display fields</span>
-                        <i
-                            class="ri-information-line link-hint"
-                            use:tooltip={{
-                                text: "Optionally select the field(s) that will be used in the listings UI. Leave empty for auto.",
-                                position: "top",
-                            }}
-                        />
-                    </label>
-                    <Select
-                        multiple
-                        searchable
-                        id={uniqueId}
-                        selectPlaceholder="Auto"
-                        items={displayFieldsList}
-                        bind:selected={field.options.displayFields}
-                    />
-                </Field>
-            </div>
-            <div class="col-sm-6">
+            <div class="col-sm-12">
                 <Field class="form-field" name="schema.{key}.options.cascadeDelete" let:uniqueId>
                     <label for={uniqueId}>
                         <span class="txt">Cascade delete</span>
+                        <!-- prettier-ignore -->
                         <i
                             class="ri-information-line link-hint"
                             use:tooltip={{
-                                text: `Whether on ${
-                                    selectedColection?.name || "relation"
-                                } record deletion to delete also the ${
-                                    $activeCollection?.name || "field"
-                                } associated records.`,
+                                text: [
+                                    `Whether on ${selectedColection?.name || "relation"} record deletion to delete also the current corresponding collection record(s).`,
+                                    !isSingle ? `For "Multiple" relation fields the cascade delete is triggered only when all ${selectedColection?.name || "relation"} ids are removed from the corresponding record.` : null
+                                ].filter(Boolean).join("\n\n"),
                                 position: "top",
                             }}
                         />
@@ -224,7 +168,7 @@
 <CollectionUpsertPanel
     bind:this={upsertPanel}
     on:save={(e) => {
-        if (e?.detail?.collection?.id) {
+        if (e?.detail?.collection?.id && e.detail.collection.type != "view") {
             field.options.collectionId = e.detail.collection.id;
         }
     }}

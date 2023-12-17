@@ -43,10 +43,10 @@ func (dao *Dao) SaveView(name string, selectQuery string) error {
 			return err
 		}
 
-		trimmed := strings.Trim(selectQuery, ";")
+		selectQuery = strings.Trim(strings.TrimSpace(selectQuery), ";")
 
 		// try to eagerly detect multiple inline statements
-		tk := tokenizer.NewFromString(trimmed)
+		tk := tokenizer.NewFromString(selectQuery)
 		tk.Separators(';')
 		if queryParts, _ := tk.ScanAll(); len(queryParts) > 1 {
 			return errors.New("multiple statements are not supported")
@@ -56,7 +56,7 @@ func (dao *Dao) SaveView(name string, selectQuery string) error {
 		//
 		// note: the query is wrapped in a secondary SELECT as a rudimentary
 		// measure to discourage multiple inline sql statements execution.
-		viewQuery := fmt.Sprintf("CREATE VIEW {{%s}} AS SELECT * FROM (%s)", name, trimmed)
+		viewQuery := fmt.Sprintf("CREATE VIEW {{%s}} AS SELECT * FROM (%s)", name, selectQuery)
 		if _, err := txDao.DB().NewQuery(viewQuery).Execute(); err != nil {
 			return err
 		}
@@ -232,8 +232,13 @@ func defaultViewField(name string) *schema.SchemaField {
 	return &schema.SchemaField{
 		Name: name,
 		Type: schema.FieldTypeJson,
+		Options: &schema.JsonOptions{
+			MaxSize: 1, // the size doesn't matter in this case
+		},
 	}
 }
+
+var castRegex = regexp.MustCompile(`(?i)^cast\s*\(.*\s+as\s+(\w+)\s*\)$`)
 
 func (dao *Dao) parseQueryToFields(selectQuery string) (map[string]*queryField, error) {
 	p := new(identifiersParser)
@@ -257,15 +262,8 @@ func (dao *Dao) parseQueryToFields(selectQuery string) (map[string]*queryField, 
 	for _, col := range p.columns {
 		colLower := strings.ToLower(col.original)
 
-		// numeric expression cast
-		if strings.Contains(colLower, "(") &&
-			(strings.HasPrefix(colLower, "count(") ||
-				strings.HasPrefix(colLower, "total(") ||
-				strings.Contains(colLower, " as numeric") ||
-				strings.Contains(colLower, " as real") ||
-				strings.Contains(colLower, " as int") ||
-				strings.Contains(colLower, " as integer") ||
-				strings.Contains(colLower, " as decimal")) {
+		// numeric aggregations
+		if strings.HasPrefix(colLower, "count(") || strings.HasPrefix(colLower, "total(") {
 			result[col.alias] = &queryField{
 				field: &schema.SchemaField{
 					Name: col.alias,
@@ -273,6 +271,38 @@ func (dao *Dao) parseQueryToFields(selectQuery string) (map[string]*queryField, 
 				},
 			}
 			continue
+		}
+
+		castMatch := castRegex.FindStringSubmatch(colLower)
+
+		// numeric casts
+		if len(castMatch) == 2 {
+			switch castMatch[1] {
+			case "real", "integer", "int", "decimal", "numeric":
+				result[col.alias] = &queryField{
+					field: &schema.SchemaField{
+						Name: col.alias,
+						Type: schema.FieldTypeNumber,
+					},
+				}
+				continue
+			case "text":
+				result[col.alias] = &queryField{
+					field: &schema.SchemaField{
+						Name: col.alias,
+						Type: schema.FieldTypeText,
+					},
+				}
+				continue
+			case "boolean", "bool":
+				result[col.alias] = &queryField{
+					field: &schema.SchemaField{
+						Name: col.alias,
+						Type: schema.FieldTypeBool,
+					},
+				}
+				continue
+			}
 		}
 
 		parts := strings.Split(col.original, ".")
@@ -431,7 +461,7 @@ type identifiersParser struct {
 }
 
 func (p *identifiersParser) parse(selectQuery string) error {
-	str := strings.Trim(selectQuery, ";")
+	str := strings.Trim(strings.TrimSpace(selectQuery), ";")
 	str = joinReplaceRegex.ReplaceAllString(str, " _join_ ")
 	str = discardReplaceRegex.ReplaceAllString(str, " _discard_ ")
 	str = commentsReplaceRegex.ReplaceAllString(str, "")
@@ -572,13 +602,20 @@ func identifierFromParts(parts []string) (identifier, error) {
 	}
 
 	result.original = trimRawIdentifier(result.original)
-	result.alias = trimRawIdentifier(result.alias)
+
+	// we trim the single quote even though it is not a valid column quote character
+	// because SQLite allows it if the context expects an identifier and not string literal
+	// (https://www.sqlite.org/lang_keywords.html)
+	result.alias = trimRawIdentifier(result.alias, "'")
 
 	return result, nil
 }
 
-func trimRawIdentifier(rawIdentifier string) string {
-	const trimChars = "`\"[];"
+func trimRawIdentifier(rawIdentifier string, extraTrimChars ...string) string {
+	trimChars := "`\"[];"
+	if len(extraTrimChars) > 0 {
+		trimChars += strings.Join(extraTrimChars, "")
+	}
 
 	parts := strings.Split(rawIdentifier, ".")
 

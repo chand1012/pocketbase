@@ -15,7 +15,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/migrate"
 )
 
-const collectionsCacheKey = "migratecmd_collections"
+const collectionsStoreKey = "migratecmd_collections"
 
 // onCollectionChange handles the automigration snapshot generation on
 // collection change event (create/update/delete).
@@ -40,7 +40,7 @@ func (p *plugin) afterCollectionChange() func(*core.ModelEvent) error {
 
 		var template string
 		var templateErr error
-		if p.options.TemplateLang == TemplateLangJS {
+		if p.config.TemplateLang == TemplateLangJS {
 			template, templateErr = p.jsDiffTemplate(new, old)
 		} else {
 			template, templateErr = p.goDiffTemplate(new, old)
@@ -62,22 +62,23 @@ func (p *plugin) afterCollectionChange() func(*core.ModelEvent) error {
 			action = "updated_" + old.Name
 		}
 
-		appliedTime := time.Now().Unix()
-		name := fmt.Sprintf("%d_%s.%s", appliedTime, action, p.options.TemplateLang)
-		filePath := filepath.Join(p.options.Dir, name)
+		name := fmt.Sprintf("%d_%s.%s", time.Now().Unix(), action, p.config.TemplateLang)
+		filePath := filepath.Join(p.config.Dir, name)
 
 		return p.app.Dao().RunInTransaction(func(txDao *daos.Dao) error {
 			// insert the migration entry
 			_, err := txDao.DB().Insert(migrate.DefaultMigrationsTable, dbx.Params{
-				"file":    name,
-				"applied": appliedTime,
+				"file": name,
+				// use microseconds for more granular applied time in case
+				// multiple collection changes happens at the ~exact time
+				"applied": time.Now().UnixMicro(),
 			}).Execute()
 			if err != nil {
 				return err
 			}
 
 			// ensure that the local migrations dir exist
-			if err := os.MkdirAll(p.options.Dir, os.ModePerm); err != nil {
+			if err := os.MkdirAll(p.config.Dir, os.ModePerm); err != nil {
 				return fmt.Errorf("failed to create migration dir: %w", err)
 			}
 
@@ -93,7 +94,7 @@ func (p *plugin) afterCollectionChange() func(*core.ModelEvent) error {
 }
 
 func (p *plugin) updateSingleCachedCollection(new, old *models.Collection) {
-	cached, _ := p.app.Cache().Get(collectionsCacheKey).(map[string]*models.Collection)
+	cached, _ := p.app.Store().Get(collectionsStoreKey).(map[string]*models.Collection)
 
 	switch {
 	case new == nil:
@@ -102,7 +103,7 @@ func (p *plugin) updateSingleCachedCollection(new, old *models.Collection) {
 		cached[new.Id] = new
 	}
 
-	p.app.Cache().Set(collectionsCacheKey, cached)
+	p.app.Store().Set(collectionsStoreKey, cached)
 }
 
 func (p *plugin) refreshCachedCollections() error {
@@ -120,35 +121,19 @@ func (p *plugin) refreshCachedCollections() error {
 		cached[c.Id] = c
 	}
 
-	p.app.Cache().Set(collectionsCacheKey, cached)
+	p.app.Store().Set(collectionsStoreKey, cached)
 
 	return nil
 }
 
 func (p *plugin) getCachedCollections() (map[string]*models.Collection, error) {
-	if !p.app.Cache().Has(collectionsCacheKey) {
+	if !p.app.Store().Has(collectionsStoreKey) {
 		if err := p.refreshCachedCollections(); err != nil {
 			return nil, err
 		}
 	}
 
-	result, _ := p.app.Cache().Get(collectionsCacheKey).(map[string]*models.Collection)
+	result, _ := p.app.Store().Get(collectionsStoreKey).(map[string]*models.Collection)
 
 	return result, nil
-}
-
-func (p *plugin) hasCustomMigrations() bool {
-	files, err := os.ReadDir(p.options.Dir)
-	if err != nil {
-		return false
-	}
-
-	for _, f := range files {
-		if f.IsDir() {
-			continue
-		}
-		return true
-	}
-
-	return false
 }

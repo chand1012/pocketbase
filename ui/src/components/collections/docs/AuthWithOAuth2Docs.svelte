@@ -1,12 +1,11 @@
 <script>
-    import { Collection } from "pocketbase";
     import ApiClient from "@/utils/ApiClient";
     import CommonHelper from "@/utils/CommonHelper";
     import CodeBlock from "@/components/base/CodeBlock.svelte";
     import SdkTabs from "@/components/collections/docs/SdkTabs.svelte";
     import FieldsQueryParam from "@/components/collections/docs/FieldsQueryParam.svelte";
 
-    export let collection = new Collection();
+    export let collection;
 
     let responseTab = 200;
     let responses = [];
@@ -75,10 +74,10 @@
         // OAuth2 authentication with a single realtime call.
         //
         // Make sure to register ${backendAbsUrl}/api/oauth2-redirect as redirect url.
-        const authData = await pb.collection('users').authWithOAuth2({ provider: 'google' });
+        const authData = await pb.collection('${collection.name}').authWithOAuth2({ provider: 'google' });
 
         // OR authenticate with manual OAuth2 code exchange
-        // const authData = await pb.collection('users').authWithOAuth2Code(...);
+        // const authData = await pb.collection('${collection.name}').authWithOAuth2Code(...);
 
         // after the above you can also access the auth data from the authStore
         console.log(pb.authStore.isValid);
@@ -99,12 +98,12 @@
         // OAuth2 authentication with a single realtime call.
         //
         // Make sure to register ${backendAbsUrl}/api/oauth2-redirect as redirect url.
-        final authData = await pb.collection('users').authWithOAuth2('google', (url) async {
+        final authData = await pb.collection('${collection.name}').authWithOAuth2('google', (url) async {
           await launchUrl(url);
         });
 
         // OR authenticate with manual OAuth2 code exchange
-        // final authData = await pb.collection('users').authWithOAuth2Code(...);
+        // final authData = await pb.collection('${collection.name}').authWithOAuth2Code(...);
 
         // after the above you can also access the auth data from the authStore
         print(pb.authStore.isValid);
@@ -241,7 +240,7 @@
 
 <div class="section-title">Responses</div>
 <div class="tabs">
-    <div class="tabs-header compact left">
+    <div class="tabs-header compact combined left">
         {#each responses as response (response.code)}
             <button
                 class="tab-item"

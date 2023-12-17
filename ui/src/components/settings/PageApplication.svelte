@@ -59,7 +59,6 @@
 
         formSettings = {
             meta: settings?.meta || {},
-            logs: settings?.logs || {},
         };
 
         originalFormSettings = JSON.parse(JSON.stringify(formSettings));
@@ -100,15 +99,10 @@
 
                     <div class="col-lg-6">
                         <Field class="form-field required" name="meta.appUrl" let:uniqueId>
-                            <label for={uniqueId}>Application url</label>
+                            <label for={uniqueId}>Application URL</label>
                             <input type="text" id={uniqueId} required bind:value={formSettings.meta.appUrl} />
                         </Field>
                     </div>
-
-                    <Field class="form-field required" name="logs.maxDays" let:uniqueId>
-                        <label for={uniqueId}>Logs max days retention</label>
-                        <input type="number" id={uniqueId} required bind:value={formSettings.logs.maxDays} />
-                    </Field>
 
                     <Field class="form-field form-field-toggle" name="meta.hideControls" let:uniqueId>
                         <input type="checkbox" id={uniqueId} bind:checked={formSettings.meta.hideControls} />
@@ -126,6 +120,7 @@
 
                     <div class="col-lg-12 flex">
                         <div class="flex-fill" />
+
                         {#if hasChanges}
                             <button
                                 type="button"

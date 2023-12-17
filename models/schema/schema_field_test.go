@@ -63,47 +63,59 @@ func TestSchemaFieldColDefinition(t *testing.T) {
 	}{
 		{
 			schema.SchemaField{Type: schema.FieldTypeText, Name: "test"},
-			"TEXT DEFAULT ''",
+			"TEXT DEFAULT '' NOT NULL",
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeNumber, Name: "test"},
-			"NUMERIC DEFAULT 0",
+			"NUMERIC DEFAULT 0 NOT NULL",
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeBool, Name: "test"},
-			"BOOLEAN DEFAULT FALSE",
+			"BOOLEAN DEFAULT FALSE NOT NULL",
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeEmail, Name: "test"},
-			"TEXT DEFAULT ''",
+			"TEXT DEFAULT '' NOT NULL",
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeUrl, Name: "test"},
-			"TEXT DEFAULT ''",
+			"TEXT DEFAULT '' NOT NULL",
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeEditor, Name: "test"},
-			"TEXT DEFAULT ''",
+			"TEXT DEFAULT '' NOT NULL",
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeDate, Name: "test"},
-			"TEXT DEFAULT ''",
-		},
-		{
-			schema.SchemaField{Type: schema.FieldTypeSelect, Name: "test"},
-			"TEXT DEFAULT ''",
+			"TEXT DEFAULT '' NOT NULL",
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeJson, Name: "test"},
 			"JSON DEFAULT NULL",
 		},
 		{
-			schema.SchemaField{Type: schema.FieldTypeFile, Name: "test"},
-			"TEXT DEFAULT ''",
+			schema.SchemaField{Type: schema.FieldTypeSelect, Name: "test"},
+			"TEXT DEFAULT '' NOT NULL",
 		},
 		{
-			schema.SchemaField{Type: schema.FieldTypeRelation, Name: "test"},
-			"TEXT DEFAULT ''",
+			schema.SchemaField{Type: schema.FieldTypeSelect, Name: "test_multiple", Options: &schema.SelectOptions{MaxSelect: 2}},
+			"JSON DEFAULT '[]' NOT NULL",
+		},
+		{
+			schema.SchemaField{Type: schema.FieldTypeFile, Name: "test"},
+			"TEXT DEFAULT '' NOT NULL",
+		},
+		{
+			schema.SchemaField{Type: schema.FieldTypeFile, Name: "test_multiple", Options: &schema.FileOptions{MaxSelect: 2}},
+			"JSON DEFAULT '[]' NOT NULL",
+		},
+		{
+			schema.SchemaField{Type: schema.FieldTypeRelation, Name: "test", Options: &schema.RelationOptions{MaxSelect: types.Pointer(1)}},
+			"TEXT DEFAULT '' NOT NULL",
+		},
+		{
+			schema.SchemaField{Type: schema.FieldTypeRelation, Name: "test_multiple", Options: &schema.RelationOptions{MaxSelect: nil}},
+			"JSON DEFAULT '[]' NOT NULL",
 		},
 	}
 
@@ -117,19 +129,19 @@ func TestSchemaFieldColDefinition(t *testing.T) {
 
 func TestSchemaFieldString(t *testing.T) {
 	f := schema.SchemaField{
-		Id:       "abc",
-		Name:     "test",
-		Type:     schema.FieldTypeText,
-		Required: true,
-		Unique:   false,
-		System:   true,
+		Id:          "abc",
+		Name:        "test",
+		Type:        schema.FieldTypeText,
+		Required:    true,
+		Presentable: true,
+		System:      true,
 		Options: &schema.TextOptions{
 			Pattern: "test",
 		},
 	}
 
 	result := f.String()
-	expected := `{"system":true,"id":"abc","name":"test","type":"text","required":true,"unique":false,"options":{"min":null,"max":null,"pattern":"test"}}`
+	expected := `{"system":true,"id":"abc","name":"test","type":"text","required":true,"presentable":true,"unique":false,"options":{"min":null,"max":null,"pattern":"test"}}`
 
 	if result != expected {
 		t.Errorf("Expected \n%v, got \n%v", expected, result)
@@ -144,19 +156,19 @@ func TestSchemaFieldMarshalJSON(t *testing.T) {
 		// empty
 		{
 			schema.SchemaField{},
-			`{"system":false,"id":"","name":"","type":"","required":false,"unique":false,"options":null}`,
+			`{"system":false,"id":"","name":"","type":"","required":false,"presentable":false,"unique":false,"options":null}`,
 		},
 		// without defined options
 		{
 			schema.SchemaField{
-				Id:       "abc",
-				Name:     "test",
-				Type:     schema.FieldTypeText,
-				Required: true,
-				Unique:   false,
-				System:   true,
+				Id:          "abc",
+				Name:        "test",
+				Type:        schema.FieldTypeText,
+				Required:    true,
+				Presentable: true,
+				System:      true,
 			},
-			`{"system":true,"id":"abc","name":"test","type":"text","required":true,"unique":false,"options":{"min":null,"max":null,"pattern":""}}`,
+			`{"system":true,"id":"abc","name":"test","type":"text","required":true,"presentable":true,"unique":false,"options":{"min":null,"max":null,"pattern":""}}`,
 		},
 		// with defined options
 		{
@@ -170,7 +182,7 @@ func TestSchemaFieldMarshalJSON(t *testing.T) {
 					Pattern: "test",
 				},
 			},
-			`{"system":true,"id":"","name":"test","type":"text","required":true,"unique":false,"options":{"min":null,"max":null,"pattern":"test"}}`,
+			`{"system":true,"id":"","name":"test","type":"text","required":true,"presentable":false,"unique":false,"options":{"min":null,"max":null,"pattern":"test"}}`,
 		},
 	}
 
@@ -195,32 +207,32 @@ func TestSchemaFieldUnmarshalJSON(t *testing.T) {
 		{
 			nil,
 			true,
-			`{"system":false,"id":"","name":"","type":"","required":false,"unique":false,"options":null}`,
+			`{"system":false,"id":"","name":"","type":"","required":false,"presentable":false,"unique":false,"options":null}`,
 		},
 		{
 			[]byte{},
 			true,
-			`{"system":false,"id":"","name":"","type":"","required":false,"unique":false,"options":null}`,
+			`{"system":false,"id":"","name":"","type":"","required":false,"presentable":false,"unique":false,"options":null}`,
 		},
 		{
 			[]byte(`{"system": true}`),
 			true,
-			`{"system":true,"id":"","name":"","type":"","required":false,"unique":false,"options":null}`,
+			`{"system":true,"id":"","name":"","type":"","required":false,"presentable":false,"unique":false,"options":null}`,
 		},
 		{
 			[]byte(`{"invalid"`),
 			true,
-			`{"system":false,"id":"","name":"","type":"","required":false,"unique":false,"options":null}`,
+			`{"system":false,"id":"","name":"","type":"","required":false,"presentable":false,"unique":false,"options":null}`,
 		},
 		{
 			[]byte(`{"type":"text","system":true}`),
 			false,
-			`{"system":true,"id":"","name":"","type":"text","required":false,"unique":false,"options":{"min":null,"max":null,"pattern":""}}`,
+			`{"system":true,"id":"","name":"","type":"text","required":false,"presentable":false,"unique":false,"options":{"min":null,"max":null,"pattern":""}}`,
 		},
 		{
 			[]byte(`{"type":"text","options":{"pattern":"test"}}`),
 			false,
-			`{"system":false,"id":"","name":"","type":"text","required":false,"unique":false,"options":{"min":null,"max":null,"pattern":"test"}}`,
+			`{"system":false,"id":"","name":"","type":"text","required":false,"presentable":false,"unique":false,"options":{"min":null,"max":null,"pattern":"test"}}`,
 		},
 	}
 
@@ -458,72 +470,72 @@ func TestSchemaFieldInitOptions(t *testing.T) {
 		{
 			schema.SchemaField{},
 			true,
-			`{"system":false,"id":"","name":"","type":"","required":false,"unique":false,"options":null}`,
+			`{"system":false,"id":"","name":"","type":"","required":false,"presentable":false,"unique":false,"options":null}`,
 		},
 		{
 			schema.SchemaField{Type: "unknown"},
 			true,
-			`{"system":false,"id":"","name":"","type":"unknown","required":false,"unique":false,"options":null}`,
+			`{"system":false,"id":"","name":"","type":"unknown","required":false,"presentable":false,"unique":false,"options":null}`,
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeText},
 			false,
-			`{"system":false,"id":"","name":"","type":"text","required":false,"unique":false,"options":{"min":null,"max":null,"pattern":""}}`,
+			`{"system":false,"id":"","name":"","type":"text","required":false,"presentable":false,"unique":false,"options":{"min":null,"max":null,"pattern":""}}`,
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeNumber},
 			false,
-			`{"system":false,"id":"","name":"","type":"number","required":false,"unique":false,"options":{"min":null,"max":null}}`,
+			`{"system":false,"id":"","name":"","type":"number","required":false,"presentable":false,"unique":false,"options":{"min":null,"max":null,"noDecimal":false}}`,
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeBool},
 			false,
-			`{"system":false,"id":"","name":"","type":"bool","required":false,"unique":false,"options":{}}`,
+			`{"system":false,"id":"","name":"","type":"bool","required":false,"presentable":false,"unique":false,"options":{}}`,
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeEmail},
 			false,
-			`{"system":false,"id":"","name":"","type":"email","required":false,"unique":false,"options":{"exceptDomains":null,"onlyDomains":null}}`,
+			`{"system":false,"id":"","name":"","type":"email","required":false,"presentable":false,"unique":false,"options":{"exceptDomains":null,"onlyDomains":null}}`,
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeUrl},
 			false,
-			`{"system":false,"id":"","name":"","type":"url","required":false,"unique":false,"options":{"exceptDomains":null,"onlyDomains":null}}`,
+			`{"system":false,"id":"","name":"","type":"url","required":false,"presentable":false,"unique":false,"options":{"exceptDomains":null,"onlyDomains":null}}`,
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeEditor},
 			false,
-			`{"system":false,"id":"","name":"","type":"editor","required":false,"unique":false,"options":{}}`,
+			`{"system":false,"id":"","name":"","type":"editor","required":false,"presentable":false,"unique":false,"options":{"convertUrls":false}}`,
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeDate},
 			false,
-			`{"system":false,"id":"","name":"","type":"date","required":false,"unique":false,"options":{"min":"","max":""}}`,
+			`{"system":false,"id":"","name":"","type":"date","required":false,"presentable":false,"unique":false,"options":{"min":"","max":""}}`,
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeSelect},
 			false,
-			`{"system":false,"id":"","name":"","type":"select","required":false,"unique":false,"options":{"maxSelect":0,"values":null}}`,
+			`{"system":false,"id":"","name":"","type":"select","required":false,"presentable":false,"unique":false,"options":{"maxSelect":0,"values":null}}`,
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeJson},
 			false,
-			`{"system":false,"id":"","name":"","type":"json","required":false,"unique":false,"options":{}}`,
+			`{"system":false,"id":"","name":"","type":"json","required":false,"presentable":false,"unique":false,"options":{"maxSize":0}}`,
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeFile},
 			false,
-			`{"system":false,"id":"","name":"","type":"file","required":false,"unique":false,"options":{"maxSelect":0,"maxSize":0,"mimeTypes":null,"thumbs":null,"protected":false}}`,
+			`{"system":false,"id":"","name":"","type":"file","required":false,"presentable":false,"unique":false,"options":{"mimeTypes":null,"thumbs":null,"maxSelect":0,"maxSize":0,"protected":false}}`,
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeRelation},
 			false,
-			`{"system":false,"id":"","name":"","type":"relation","required":false,"unique":false,"options":{"collectionId":"","cascadeDelete":false,"minSelect":null,"maxSelect":null,"displayFields":null}}`,
+			`{"system":false,"id":"","name":"","type":"relation","required":false,"presentable":false,"unique":false,"options":{"collectionId":"","cascadeDelete":false,"minSelect":null,"maxSelect":null,"displayFields":null}}`,
 		},
 		{
 			schema.SchemaField{Type: schema.FieldTypeUser},
 			false,
-			`{"system":false,"id":"","name":"","type":"user","required":false,"unique":false,"options":{"maxSelect":0,"cascadeDelete":false}}`,
+			`{"system":false,"id":"","name":"","type":"user","required":false,"presentable":false,"unique":false,"options":{"maxSelect":0,"cascadeDelete":false}}`,
 		},
 		{
 			schema.SchemaField{
@@ -531,21 +543,23 @@ func TestSchemaFieldInitOptions(t *testing.T) {
 				Options: &schema.TextOptions{Pattern: "test"},
 			},
 			false,
-			`{"system":false,"id":"","name":"","type":"text","required":false,"unique":false,"options":{"min":null,"max":null,"pattern":"test"}}`,
+			`{"system":false,"id":"","name":"","type":"text","required":false,"presentable":false,"unique":false,"options":{"min":null,"max":null,"pattern":"test"}}`,
 		},
 	}
 
 	for i, s := range scenarios {
-		err := s.field.InitOptions()
+		t.Run(fmt.Sprintf("s%d_%s", i, s.field.Type), func(t *testing.T) {
+			err := s.field.InitOptions()
 
-		hasErr := err != nil
-		if hasErr != s.expectError {
-			t.Errorf("(%d) Expected %v, got %v (%v)", i, s.expectError, hasErr, err)
-		}
+			hasErr := err != nil
+			if hasErr != s.expectError {
+				t.Fatalf("Expected %v, got %v (%v)", s.expectError, hasErr, err)
+			}
 
-		if s.field.String() != s.expectJson {
-			t.Errorf("(%d), Expected %v, got %v", i, s.expectJson, s.field.String())
-		}
+			if s.field.String() != s.expectJson {
+				t.Fatalf(" Expected\n%v\ngot\n%v", s.expectJson, s.field.String())
+			}
+		})
 	}
 }
 
@@ -591,10 +605,15 @@ func TestSchemaFieldPrepareValue(t *testing.T) {
 		{schema.SchemaField{Type: schema.FieldTypeJson}, nil, "null"},
 		{schema.SchemaField{Type: schema.FieldTypeJson}, "null", "null"},
 		{schema.SchemaField{Type: schema.FieldTypeJson}, 123, "123"},
+		{schema.SchemaField{Type: schema.FieldTypeJson}, -123, "-123"},
 		{schema.SchemaField{Type: schema.FieldTypeJson}, "123", "123"},
+		{schema.SchemaField{Type: schema.FieldTypeJson}, "-123", "-123"},
 		{schema.SchemaField{Type: schema.FieldTypeJson}, 123.456, "123.456"},
+		{schema.SchemaField{Type: schema.FieldTypeJson}, -123.456, "-123.456"},
 		{schema.SchemaField{Type: schema.FieldTypeJson}, "123.456", "123.456"},
+		{schema.SchemaField{Type: schema.FieldTypeJson}, "-123.456", "-123.456"},
 		{schema.SchemaField{Type: schema.FieldTypeJson}, "123.456 abc", `"123.456 abc"`}, // invalid numeric string
+		{schema.SchemaField{Type: schema.FieldTypeJson}, "-a123", `"-a123"`},
 		{schema.SchemaField{Type: schema.FieldTypeJson}, true, "true"},
 		{schema.SchemaField{Type: schema.FieldTypeJson}, "true", "true"},
 		{schema.SchemaField{Type: schema.FieldTypeJson}, false, "false"},
@@ -1731,8 +1750,12 @@ func TestTextOptionsValidate(t *testing.T) {
 }
 
 func TestNumberOptionsValidate(t *testing.T) {
-	number1 := 10.0
-	number2 := 20.0
+	int1 := 10.0
+	int2 := 20.0
+
+	decimal1 := 10.5
+	decimal2 := 20.5
+
 	scenarios := []fieldOptionsScenario{
 		{
 			"empty",
@@ -1742,23 +1765,41 @@ func TestNumberOptionsValidate(t *testing.T) {
 		{
 			"max - without min",
 			schema.NumberOptions{
-				Max: &number1,
+				Max: &int1,
 			},
 			[]string{},
 		},
 		{
 			"max - failure with min",
 			schema.NumberOptions{
-				Min: &number2,
-				Max: &number1,
+				Min: &int2,
+				Max: &int1,
 			},
 			[]string{"max"},
 		},
 		{
 			"max - success with min",
 			schema.NumberOptions{
-				Min: &number1,
-				Max: &number2,
+				Min: &int1,
+				Max: &int2,
+			},
+			[]string{},
+		},
+		{
+			"NoDecimal range failure",
+			schema.NumberOptions{
+				Min:       &decimal1,
+				Max:       &decimal2,
+				NoDecimal: true,
+			},
+			[]string{"min", "max"},
+		},
+		{
+			"NoDecimal range success",
+			schema.NumberOptions{
+				Min:       &int1,
+				Max:       &int2,
+				NoDecimal: true,
 			},
 			[]string{},
 		},
@@ -2019,6 +2060,16 @@ func TestJsonOptionsValidate(t *testing.T) {
 		{
 			"empty",
 			schema.JsonOptions{},
+			[]string{"maxSize"},
+		},
+		{
+			"MaxSize < 0",
+			schema.JsonOptions{MaxSize: -1},
+			[]string{"maxSize"},
+		},
+		{
+			"MaxSize > 0",
+			schema.JsonOptions{MaxSize: 1},
 			[]string{},
 		},
 	}
@@ -2122,6 +2173,22 @@ func TestRelationOptionsValidate(t *testing.T) {
 			[]string{"collectionId"},
 		},
 		{
+			"MinSelect < 0",
+			schema.RelationOptions{
+				CollectionId: "abc",
+				MinSelect:    types.Pointer(-1),
+			},
+			[]string{"minSelect"},
+		},
+		{
+			"MinSelect >= 0",
+			schema.RelationOptions{
+				CollectionId: "abc",
+				MinSelect:    types.Pointer(0),
+			},
+			[]string{},
+		},
+		{
 			"MaxSelect <= 0",
 			schema.RelationOptions{
 				CollectionId: "abc",
@@ -2136,6 +2203,42 @@ func TestRelationOptionsValidate(t *testing.T) {
 				MaxSelect:    types.Pointer(1),
 			},
 			[]string{},
+		},
+		{
+			"MinSelect < MaxSelect",
+			schema.RelationOptions{
+				CollectionId: "abc",
+				MinSelect:    nil,
+				MaxSelect:    types.Pointer(1),
+			},
+			[]string{},
+		},
+		{
+			"MinSelect = MaxSelect (non-zero)",
+			schema.RelationOptions{
+				CollectionId: "abc",
+				MinSelect:    types.Pointer(1),
+				MaxSelect:    types.Pointer(1),
+			},
+			[]string{},
+		},
+		{
+			"MinSelect = MaxSelect (both zero)",
+			schema.RelationOptions{
+				CollectionId: "abc",
+				MinSelect:    types.Pointer(0),
+				MaxSelect:    types.Pointer(0),
+			},
+			[]string{"maxSelect"},
+		},
+		{
+			"MinSelect > MaxSelect",
+			schema.RelationOptions{
+				CollectionId: "abc",
+				MinSelect:    types.Pointer(2),
+				MaxSelect:    types.Pointer(1),
+			},
+			[]string{"maxSelect"},
 		},
 	}
 

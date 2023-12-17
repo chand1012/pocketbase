@@ -1,6 +1,5 @@
 <script>
     import { scale, slide } from "svelte/transition";
-    import { Collection } from "pocketbase";
     import { errors } from "@/stores/errors";
     import tooltip from "@/actions/tooltip";
     import Field from "@/components/base/Field.svelte";
@@ -8,9 +7,9 @@
     import MultipleValueInput from "@/components/base/MultipleValueInput.svelte";
     import Accordion from "@/components/base/Accordion.svelte";
 
-    export let collection = new Collection();
+    export let collection;
 
-    $: if (collection.$isAuth && CommonHelper.isEmpty(collection.options)) {
+    $: if (collection.type === "auth" && CommonHelper.isEmpty(collection.options)) {
         collection.options = {
             allowEmailAuth: true,
             allowUsernameAuth: true,
@@ -92,7 +91,7 @@
         </Field>
 
         {#if collection.options.allowEmailAuth}
-            <div class="grid grid-sm p-t-sm" transition:slide|local={{ duration: 150 }}>
+            <div class="grid grid-sm p-t-sm" transition:slide={{ duration: 150 }}>
                 <div class="col-lg-6">
                     <Field
                         class="form-field {!CommonHelper.isEmpty(collection.options.onlyEmailDomains)
@@ -179,9 +178,9 @@
         </Field>
 
         {#if collection.options.allowOAuth2Auth}
-            <div class="block" transition:slide|local={{ duration: 150 }}>
+            <div class="block" transition:slide={{ duration: 150 }}>
                 <div class="flex p-t-base">
-                    <a href="/_/#/settings/auth-providers" target="_blank" class="btn btn-sm btn-outline">
+                    <a href="#/settings/auth-providers" target="_blank" class="btn btn-sm btn-outline">
                         <span class="txt">Manage OAuth2 providers</span>
                     </a>
                 </div>
@@ -214,6 +213,23 @@
             class="ri-information-line txt-sm link-hint"
             use:tooltip={{
                 text: "The constraint is applied only for new records.\nAlso note that some OAuth2 providers (like Twitter), don't return an email and the authentication may fail if the email field is required.",
+                position: "right",
+            }}
+        />
+    </label>
+</Field>
+
+<Field class="form-field form-field-toggle m-b-sm" name="options.onlyVerified" let:uniqueId>
+    <input type="checkbox" id={uniqueId} bind:checked={collection.options.onlyVerified} />
+    <label for={uniqueId}>
+        <span class="txt">Forbid authentication for unverified users</span>
+        <i
+            class="ri-information-line txt-sm link-hint"
+            use:tooltip={{
+                text: [
+                    "If enabled, it returns 403 for new unverfied user authentication requests.",
+                    "If you need more granular control, don't enable this option and instead use the `@request.auth.verified = true` rule in the specific collection(s) you are targeting.",
+                ].join("\n"),
                 position: "right",
             }}
         />

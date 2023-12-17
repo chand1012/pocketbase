@@ -11,6 +11,7 @@ import (
 	"github.com/pocketbase/pocketbase/models/settings"
 	"github.com/pocketbase/pocketbase/tools/auth"
 	"github.com/pocketbase/pocketbase/tools/mailer"
+	"github.com/pocketbase/pocketbase/tools/types"
 )
 
 func TestSettingsValidate(t *testing.T) {
@@ -67,6 +68,16 @@ func TestSettingsValidate(t *testing.T) {
 	s.OIDC3Auth.ClientId = ""
 	s.AppleAuth.Enabled = true
 	s.AppleAuth.ClientId = ""
+	s.InstagramAuth.Enabled = true
+	s.InstagramAuth.ClientId = ""
+	s.VKAuth.Enabled = true
+	s.VKAuth.ClientId = ""
+	s.YandexAuth.Enabled = true
+	s.YandexAuth.ClientId = ""
+	s.PatreonAuth.Enabled = true
+	s.PatreonAuth.ClientId = ""
+	s.MailcowAuth.Enabled = true
+	s.MailcowAuth.ClientId = ""
 
 	// check if Validate() is triggering the members validate methods.
 	err := s.Validate()
@@ -105,6 +116,11 @@ func TestSettingsValidate(t *testing.T) {
 		`"oidc2Auth":{`,
 		`"oidc3Auth":{`,
 		`"appleAuth":{`,
+		`"instagramAuth":{`,
+		`"vkAuth":{`,
+		`"yandexAuth":{`,
+		`"patreonAuth":{`,
+		`"mailcowAuth":{`,
 	}
 
 	errBytes, _ := json.Marshal(err)
@@ -172,6 +188,16 @@ func TestSettingsMerge(t *testing.T) {
 	s2.OIDC3Auth.ClientId = "oidc3_test"
 	s2.AppleAuth.Enabled = true
 	s2.AppleAuth.ClientId = "apple_test"
+	s2.InstagramAuth.Enabled = true
+	s2.InstagramAuth.ClientId = "instagram_test"
+	s2.VKAuth.Enabled = true
+	s2.VKAuth.ClientId = "vk_test"
+	s2.YandexAuth.Enabled = true
+	s2.YandexAuth.ClientId = "yandex_test"
+	s2.PatreonAuth.Enabled = true
+	s2.PatreonAuth.ClientId = "patreon_test"
+	s2.MailcowAuth.Enabled = true
+	s2.MailcowAuth.ClientId = "mailcow_test"
 
 	if err := s1.Merge(s2); err != nil {
 		t.Fatal(err)
@@ -259,6 +285,11 @@ func TestSettingsRedactClone(t *testing.T) {
 	s1.OIDC2Auth.ClientSecret = testSecret
 	s1.OIDC3Auth.ClientSecret = testSecret
 	s1.AppleAuth.ClientSecret = testSecret
+	s1.InstagramAuth.ClientSecret = testSecret
+	s1.VKAuth.ClientSecret = testSecret
+	s1.YandexAuth.ClientSecret = testSecret
+	s1.PatreonAuth.ClientSecret = testSecret
+	s1.MailcowAuth.ClientSecret = testSecret
 
 	s1Bytes, err := json.Marshal(s1)
 	if err != nil {
@@ -314,6 +345,11 @@ func TestNamedAuthProviderConfigs(t *testing.T) {
 	s.OIDC2Auth.ClientId = "oidc2_test"
 	s.OIDC3Auth.ClientId = "oidc3_test"
 	s.AppleAuth.ClientId = "apple_test"
+	s.InstagramAuth.ClientId = "instagram_test"
+	s.VKAuth.ClientId = "vk_test"
+	s.YandexAuth.ClientId = "yandex_test"
+	s.PatreonAuth.ClientId = "patreon_test"
+	s.MailcowAuth.ClientId = "mailcow_test"
 
 	result := s.NamedAuthProviderConfigs()
 
@@ -342,6 +378,11 @@ func TestNamedAuthProviderConfigs(t *testing.T) {
 		`"oidc2":{"enabled":false,"clientId":"oidc2_test"`,
 		`"oidc3":{"enabled":false,"clientId":"oidc3_test"`,
 		`"apple":{"enabled":false,"clientId":"apple_test"`,
+		`"instagram":{"enabled":false,"clientId":"instagram_test"`,
+		`"vk":{"enabled":false,"clientId":"vk_test"`,
+		`"yandex":{"enabled":false,"clientId":"yandex_test"`,
+		`"patreon":{"enabled":false,"clientId":"patreon_test"`,
+		`"mailcow":{"enabled":false,"clientId":"mailcow_test"`,
 	}
 	for _, p := range expectedParts {
 		if !strings.Contains(encodedStr, p) {
@@ -450,6 +491,26 @@ func TestSmtpConfigValidate(t *testing.T) {
 				Host:       "example.com",
 				Port:       100,
 				AuthMethod: mailer.SmtpAuthLogin,
+			},
+			false,
+		},
+		// invalid ehlo/helo name
+		{
+			settings.SmtpConfig{
+				Enabled:   true,
+				Host:      "example.com",
+				Port:      100,
+				LocalName: "invalid!",
+			},
+			true,
+		},
+		// valid ehlo/helo name
+		{
+			settings.SmtpConfig{
+				Enabled:   true,
+				Host:      "example.com",
+				Port:      100,
+				LocalName: "example.com",
 			},
 			false,
 		},
@@ -881,6 +942,8 @@ func TestAuthProviderConfigValidate(t *testing.T) {
 				Enabled:      true,
 				ClientId:     "test",
 				ClientSecret: "test",
+				DisplayName:  "test",
+				PKCE:         types.Pointer(true),
 				AuthUrl:      "https://example.com",
 				TokenUrl:     "https://example.com",
 				UserApiUrl:   "https://example.com",
@@ -918,6 +981,8 @@ func TestAuthProviderConfigSetupProvider(t *testing.T) {
 		AuthUrl:      "test_AuthUrl",
 		UserApiUrl:   "test_UserApiUrl",
 		TokenUrl:     "test_TokenUrl",
+		DisplayName:  "test_DisplayName",
+		PKCE:         types.Pointer(true),
 	}
 	if err := c2.SetupProvider(provider); err != nil {
 		t.Error(err)
@@ -941,5 +1006,13 @@ func TestAuthProviderConfigSetupProvider(t *testing.T) {
 
 	if provider.TokenUrl() != c2.TokenUrl {
 		t.Fatalf("Expected TokenUrl %s, got %s", c2.TokenUrl, provider.TokenUrl())
+	}
+
+	if provider.DisplayName() != c2.DisplayName {
+		t.Fatalf("Expected DisplayName %s, got %s", c2.DisplayName, provider.DisplayName())
+	}
+
+	if provider.PKCE() != *c2.PKCE {
+		t.Fatalf("Expected PKCE %v, got %v", *c2.PKCE, provider.PKCE())
 	}
 }

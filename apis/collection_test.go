@@ -1,6 +1,7 @@
 package apis_test
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -9,8 +10,8 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v5"
+	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
-	"github.com/pocketbase/pocketbase/models/schema"
 	"github.com/pocketbase/pocketbase/tests"
 	"github.com/pocketbase/pocketbase/tools/list"
 )
@@ -45,7 +46,7 @@ func TestCollectionsList(t *testing.T) {
 			ExpectedContent: []string{
 				`"page":1`,
 				`"perPage":30`,
-				`"totalItems":10`,
+				`"totalItems":11`,
 				`"items":[{`,
 				`"id":"_pb_users_auth_"`,
 				`"id":"v851q4r790rhknl"`,
@@ -55,6 +56,7 @@ func TestCollectionsList(t *testing.T) {
 				`"id":"wzlqyes4orhoygb"`,
 				`"id":"4d1blo5cuycfaca"`,
 				`"id":"9n89pl5vkct6330"`,
+				`"id":"ib3m2700k5hlsjz"`,
 				`"type":"auth"`,
 				`"type":"base"`,
 			},
@@ -73,9 +75,9 @@ func TestCollectionsList(t *testing.T) {
 			ExpectedContent: []string{
 				`"page":2`,
 				`"perPage":2`,
-				`"totalItems":10`,
+				`"totalItems":11`,
 				`"items":[{`,
-				`"id":"kpv709sk2lqbqk8"`,
+				`"id":"v9gwnfh02gjq1q0"`,
 				`"id":"9n89pl5vkct6330"`,
 			},
 			ExpectedEvents: map[string]int{
@@ -243,7 +245,7 @@ func TestCollectionDelete(t *testing.T) {
 				"OnCollectionBeforeDeleteRequest": 1,
 				"OnCollectionAfterDeleteRequest":  1,
 			},
-			AfterTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+			AfterTestFunc: func(t *testing.T, app *tests.TestApp, res *http.Response) {
 				ensureDeletedFiles(app, "9n89pl5vkct6330")
 			},
 		},
@@ -262,7 +264,7 @@ func TestCollectionDelete(t *testing.T) {
 				"OnCollectionBeforeDeleteRequest": 1,
 				"OnCollectionAfterDeleteRequest":  1,
 			},
-			AfterTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+			AfterTestFunc: func(t *testing.T, app *tests.TestApp, res *http.Response) {
 				ensureDeletedFiles(app, "9n89pl5vkct6330")
 			},
 		},
@@ -299,8 +301,28 @@ func TestCollectionDelete(t *testing.T) {
 			RequestHeaders: map[string]string{
 				"Authorization": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6InN5d2JoZWNuaDQ2cmhtMCIsInR5cGUiOiJhZG1pbiIsImV4cCI6MjIwODk4NTI2MX0.M1m--VOqGyv0d23eeUc0r9xE8ZzHaYVmVFw1VZW6gT8",
 			},
-			Delay:          100 * time.Millisecond,
 			ExpectedStatus: 204,
+			ExpectedEvents: map[string]int{
+				"OnModelBeforeDelete":             1,
+				"OnModelAfterDelete":              1,
+				"OnCollectionBeforeDeleteRequest": 1,
+				"OnCollectionAfterDeleteRequest":  1,
+			},
+		},
+		{
+			Name:   "OnCollectionAfterDeleteRequest error response",
+			Method: http.MethodDelete,
+			Url:    "/api/collections/view2",
+			RequestHeaders: map[string]string{
+				"Authorization": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6InN5d2JoZWNuaDQ2cmhtMCIsInR5cGUiOiJhZG1pbiIsImV4cCI6MjIwODk4NTI2MX0.M1m--VOqGyv0d23eeUc0r9xE8ZzHaYVmVFw1VZW6gT8",
+			},
+			BeforeTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+				app.OnCollectionAfterDeleteRequest().Add(func(e *core.CollectionDeleteEvent) error {
+					return errors.New("error")
+				})
+			},
+			ExpectedStatus:  400,
+			ExpectedContent: []string{`"data":{}`},
 			ExpectedEvents: map[string]int{
 				"OnModelBeforeDelete":             1,
 				"OnModelAfterDelete":              1,
@@ -378,7 +400,7 @@ func TestCollectionCreate(t *testing.T) {
 				`"name":"new"`,
 				`"type":"base"`,
 				`"system":false`,
-				`"schema":[{"system":false,"id":"12345789","name":"test","type":"text","required":false,"unique":false,"options":{"min":null,"max":null,"pattern":""}}]`,
+				`"schema":[{"system":false,"id":"12345789","name":"test","type":"text","required":false,"presentable":false,"unique":false,"options":{"min":null,"max":null,"pattern":""}}]`,
 				`"options":{}`,
 			},
 			ExpectedEvents: map[string]int{
@@ -402,8 +424,8 @@ func TestCollectionCreate(t *testing.T) {
 				`"name":"new"`,
 				`"type":"auth"`,
 				`"system":false`,
-				`"schema":[{"system":false,"id":"12345789","name":"test","type":"text","required":false,"unique":false,"options":{"min":null,"max":null,"pattern":""}}]`,
-				`"options":{"allowEmailAuth":false,"allowOAuth2Auth":false,"allowUsernameAuth":false,"exceptEmailDomains":null,"manageRule":null,"minPasswordLength":0,"onlyEmailDomains":null,"requireEmail":false}`,
+				`"schema":[{"system":false,"id":"12345789","name":"test","type":"text","required":false,"presentable":false,"unique":false,"options":{"min":null,"max":null,"pattern":""}}]`,
+				`"options":{"allowEmailAuth":false,"allowOAuth2Auth":false,"allowUsernameAuth":false,"exceptEmailDomains":null,"manageRule":null,"minPasswordLength":0,"onlyEmailDomains":null,"onlyVerified":false,"requireEmail":false}`,
 			},
 			ExpectedEvents: map[string]int{
 				"OnModelBeforeCreate":             1,
@@ -536,6 +558,28 @@ func TestCollectionCreate(t *testing.T) {
 				`"options":{"minPasswordLength":{"code":"validation_required"`,
 			},
 		},
+		{
+			Name:   "OnCollectionAfterCreateRequest error response",
+			Method: http.MethodPost,
+			Url:    "/api/collections",
+			Body:   strings.NewReader(`{"name":"new","type":"base","schema":[{"type":"text","id":"12345789","name":"test"}]}`),
+			RequestHeaders: map[string]string{
+				"Authorization": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6InN5d2JoZWNuaDQ2cmhtMCIsInR5cGUiOiJhZG1pbiIsImV4cCI6MjIwODk4NTI2MX0.M1m--VOqGyv0d23eeUc0r9xE8ZzHaYVmVFw1VZW6gT8",
+			},
+			BeforeTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+				app.OnCollectionAfterCreateRequest().Add(func(e *core.CollectionCreateEvent) error {
+					return errors.New("error")
+				})
+			},
+			ExpectedStatus:  400,
+			ExpectedContent: []string{`"data":{}`},
+			ExpectedEvents: map[string]int{
+				"OnModelBeforeCreate":             1,
+				"OnModelAfterCreate":              1,
+				"OnCollectionBeforeCreateRequest": 1,
+				"OnCollectionAfterCreateRequest":  1,
+			},
+		},
 
 		// view
 		// -----------------------------------------------------------
@@ -649,7 +693,7 @@ func TestCollectionCreate(t *testing.T) {
 				"OnCollectionBeforeCreateRequest": 1,
 				"OnCollectionAfterCreateRequest":  1,
 			},
-			AfterTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+			AfterTestFunc: func(t *testing.T, app *tests.TestApp, res *http.Response) {
 				indexes, err := app.Dao().TableIndexes("new")
 				if err != nil {
 					t.Fatal(err)
@@ -721,6 +765,28 @@ func TestCollectionUpdate(t *testing.T) {
 			},
 		},
 		{
+			Name:   "OnCollectionAfterUpdateRequest error response",
+			Method: http.MethodPatch,
+			Url:    "/api/collections/demo1",
+			Body:   strings.NewReader(`{}`),
+			RequestHeaders: map[string]string{
+				"Authorization": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6InN5d2JoZWNuaDQ2cmhtMCIsInR5cGUiOiJhZG1pbiIsImV4cCI6MjIwODk4NTI2MX0.M1m--VOqGyv0d23eeUc0r9xE8ZzHaYVmVFw1VZW6gT8",
+			},
+			BeforeTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+				app.OnCollectionAfterUpdateRequest().Add(func(e *core.CollectionUpdateEvent) error {
+					return errors.New("error")
+				})
+			},
+			ExpectedStatus:  400,
+			ExpectedContent: []string{`"data":{}`},
+			ExpectedEvents: map[string]int{
+				"OnCollectionAfterUpdateRequest":  1,
+				"OnCollectionBeforeUpdateRequest": 1,
+				"OnModelAfterUpdate":              1,
+				"OnModelBeforeUpdate":             1,
+			},
+		},
+		{
 			Name:   "authorized as admin + invalid data (eg. existing name)",
 			Method: http.MethodPatch,
 			Url:    "/api/collections/demo1",
@@ -757,7 +823,7 @@ func TestCollectionUpdate(t *testing.T) {
 				"OnCollectionBeforeUpdateRequest": 1,
 				"OnCollectionAfterUpdateRequest":  1,
 			},
-			AfterTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+			AfterTestFunc: func(t *testing.T, app *tests.TestApp, res *http.Response) {
 				// check if the record table was renamed
 				if !app.Dao().HasTable("new") {
 					t.Fatal("Couldn't find record table 'new'.")
@@ -893,88 +959,6 @@ func TestCollectionUpdate(t *testing.T) {
 			},
 		},
 
-		// rel field change displayFields propagation
-		// -----------------------------------------------------------
-		{
-			Name:   "renaming a display field should also update the referenced displayFields value",
-			Method: http.MethodPatch,
-			Url:    "/api/collections/demo3",
-			Body: strings.NewReader(`{
-				"schema":[
-					{
-						"id": "w5z2x0nq",
-						"type": "text",
-						"name": "title_change"
-					}
-				]
-			}`),
-			RequestHeaders: map[string]string{
-				"Authorization": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6InN5d2JoZWNuaDQ2cmhtMCIsInR5cGUiOiJhZG1pbiIsImV4cCI6MjIwODk4NTI2MX0.M1m--VOqGyv0d23eeUc0r9xE8ZzHaYVmVFw1VZW6gT8",
-			},
-			ExpectedStatus: 200,
-			ExpectedContent: []string{
-				`"name":"title_change"`,
-			},
-			ExpectedEvents: map[string]int{
-				"OnModelBeforeUpdate":             2,
-				"OnModelAfterUpdate":              2,
-				"OnCollectionBeforeUpdateRequest": 1,
-				"OnCollectionAfterUpdateRequest":  1,
-			},
-			AfterTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
-				collection, err := app.Dao().FindCollectionByNameOrId("demo4")
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				relField := collection.Schema.GetFieldByName("rel_many_no_cascade_required")
-				options := relField.Options.(*schema.RelationOptions)
-				expectedDisplayFields := []string{"title_change", "id"}
-				if len(list.SubtractSlice(options.DisplayFields, expectedDisplayFields)) != 0 {
-					t.Fatalf("Expected displayFields %v, got %v", expectedDisplayFields, options.DisplayFields)
-				}
-			},
-		},
-		{
-			Name:   "deleting a display field should also update the referenced displayFields value",
-			Method: http.MethodPatch,
-			Url:    "/api/collections/demo3",
-			Body: strings.NewReader(`{
-				"schema":[
-					{
-						"type": "text",
-						"name": "new_field"
-					}
-				]
-			}`),
-			RequestHeaders: map[string]string{
-				"Authorization": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6InN5d2JoZWNuaDQ2cmhtMCIsInR5cGUiOiJhZG1pbiIsImV4cCI6MjIwODk4NTI2MX0.M1m--VOqGyv0d23eeUc0r9xE8ZzHaYVmVFw1VZW6gT8",
-			},
-			ExpectedStatus: 200,
-			ExpectedContent: []string{
-				`"name":"new_field"`,
-			},
-			ExpectedEvents: map[string]int{
-				"OnModelBeforeUpdate":             2,
-				"OnModelAfterUpdate":              2,
-				"OnCollectionBeforeUpdateRequest": 1,
-				"OnCollectionAfterUpdateRequest":  1,
-			},
-			AfterTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
-				collection, err := app.Dao().FindCollectionByNameOrId("demo4")
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				relField := collection.Schema.GetFieldByName("rel_many_no_cascade_required")
-				options := relField.Options.(*schema.RelationOptions)
-				expectedDisplayFields := []string{"id"}
-				if len(list.SubtractSlice(options.DisplayFields, expectedDisplayFields)) != 0 {
-					t.Fatalf("Expected displayFields %v, got %v", expectedDisplayFields, options.DisplayFields)
-				}
-			},
-		},
-
 		// view
 		// -----------------------------------------------------------
 		{
@@ -1076,7 +1060,7 @@ func TestCollectionUpdate(t *testing.T) {
 				"OnCollectionBeforeUpdateRequest": 1,
 				"OnCollectionAfterUpdateRequest":  1,
 			},
-			AfterTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+			AfterTestFunc: func(t *testing.T, app *tests.TestApp, res *http.Response) {
 				indexes, err := app.Dao().TableIndexes("new")
 				if err != nil {
 					t.Fatal(err)
@@ -1098,7 +1082,7 @@ func TestCollectionUpdate(t *testing.T) {
 }
 
 func TestCollectionsImport(t *testing.T) {
-	totalCollections := 10
+	totalCollections := 11
 
 	scenarios := []tests.ApiScenario{
 		{
@@ -1131,7 +1115,7 @@ func TestCollectionsImport(t *testing.T) {
 				`"data":{`,
 				`"collections":{"code":"validation_required"`,
 			},
-			AfterTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+			AfterTestFunc: func(t *testing.T, app *tests.TestApp, res *http.Response) {
 				collections := []*models.Collection{}
 				if err := app.Dao().CollectionQuery().All(&collections); err != nil {
 					t.Fatal(err)
@@ -1157,9 +1141,9 @@ func TestCollectionsImport(t *testing.T) {
 			},
 			ExpectedEvents: map[string]int{
 				"OnCollectionsBeforeImportRequest": 1,
-				"OnModelBeforeDelete":              4,
+				"OnModelBeforeDelete":              1,
 			},
-			AfterTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+			AfterTestFunc: func(t *testing.T, app *tests.TestApp, res *http.Response) {
 				collections := []*models.Collection{}
 				if err := app.Dao().CollectionQuery().All(&collections); err != nil {
 					t.Fatal(err)
@@ -1201,7 +1185,7 @@ func TestCollectionsImport(t *testing.T) {
 				"OnCollectionsBeforeImportRequest": 1,
 				"OnModelBeforeCreate":              2,
 			},
-			AfterTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+			AfterTestFunc: func(t *testing.T, app *tests.TestApp, res *http.Response) {
 				collections := []*models.Collection{}
 				if err := app.Dao().CollectionQuery().All(&collections); err != nil {
 					t.Fatal(err)
@@ -1257,7 +1241,7 @@ func TestCollectionsImport(t *testing.T) {
 				"OnModelBeforeCreate":              3,
 				"OnModelAfterCreate":               3,
 			},
-			AfterTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+			AfterTestFunc: func(t *testing.T, app *tests.TestApp, res *http.Response) {
 				collections := []*models.Collection{}
 				if err := app.Dao().CollectionQuery().All(&collections); err != nil {
 					t.Fatal(err)
@@ -1355,14 +1339,14 @@ func TestCollectionsImport(t *testing.T) {
 			ExpectedEvents: map[string]int{
 				"OnCollectionsAfterImportRequest":  1,
 				"OnCollectionsBeforeImportRequest": 1,
-				"OnModelBeforeDelete":              8,
-				"OnModelAfterDelete":               8,
+				"OnModelBeforeDelete":              9,
+				"OnModelAfterDelete":               9,
 				"OnModelBeforeUpdate":              2,
 				"OnModelAfterUpdate":               2,
 				"OnModelBeforeCreate":              1,
 				"OnModelAfterCreate":               1,
 			},
-			AfterTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+			AfterTestFunc: func(t *testing.T, app *tests.TestApp, res *http.Response) {
 				collections := []*models.Collection{}
 				if err := app.Dao().CollectionQuery().All(&collections); err != nil {
 					t.Fatal(err)
@@ -1371,6 +1355,58 @@ func TestCollectionsImport(t *testing.T) {
 				if len(collections) != expected {
 					t.Fatalf("Expected %d collections, got %d", expected, len(collections))
 				}
+			},
+		},
+		{
+			Name:   "authorized as admin + successful collections save",
+			Method: http.MethodPut,
+			Url:    "/api/collections/import",
+			Body: strings.NewReader(`{
+				"collections":[
+					{
+						"name": "import1",
+						"schema": [
+							{
+							  "id": "koih1lqx",
+							  "name": "test",
+							  "type": "text"
+							}
+						]
+					},
+					{
+						"name": "import2",
+						"schema": [
+							{
+							  "id": "koih1lqx",
+							  "name": "test",
+							  "type": "text"
+							}
+						],
+						"indexes": [
+							"create index idx_test on import2 (test)"
+						]
+					},
+					{
+						"name": "auth_without_schema",
+						"type": "auth"
+					}
+				]
+			}`),
+			RequestHeaders: map[string]string{
+				"Authorization": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6InN5d2JoZWNuaDQ2cmhtMCIsInR5cGUiOiJhZG1pbiIsImV4cCI6MjIwODk4NTI2MX0.M1m--VOqGyv0d23eeUc0r9xE8ZzHaYVmVFw1VZW6gT8",
+			},
+			BeforeTestFunc: func(t *testing.T, app *tests.TestApp, e *echo.Echo) {
+				app.OnCollectionsAfterImportRequest().Add(func(e *core.CollectionsImportEvent) error {
+					return errors.New("error")
+				})
+			},
+			ExpectedStatus:  400,
+			ExpectedContent: []string{`"data":{}`},
+			ExpectedEvents: map[string]int{
+				"OnCollectionsBeforeImportRequest": 1,
+				"OnCollectionsAfterImportRequest":  1,
+				"OnModelBeforeCreate":              3,
+				"OnModelAfterCreate":               3,
 			},
 		},
 	}

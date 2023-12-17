@@ -1,11 +1,11 @@
 import SelfHostedOptions from "@/components/settings/providers/SelfHostedOptions.svelte";
-import MicrosoftOptions  from "@/components/settings/providers/MicrosoftOptions.svelte";
 import OIDCOptions       from "@/components/settings/providers/OIDCOptions.svelte";
+import MicrosoftOptions  from "@/components/settings/providers/MicrosoftOptions.svelte";
 import AppleOptions      from "@/components/settings/providers/AppleOptions.svelte";
 
 // Object list with all supported OAuth2 providers in the format:
 // ```
-// [ { key, title, logo, optionsComponent? }, ... ]
+// [ { key, title, logo, optionsComponent?, optionComponentProps? }, ... ]
 // ```
 //
 // The logo images must be placed inside the /public/images/oauth2 directory.
@@ -13,6 +13,7 @@ import AppleOptions      from "@/components/settings/providers/AppleOptions.svel
 // If `optionsComponent` is provided it will receive 2 parameters:
 // - `key`    - the provider settings key (eg. "gitlabAuth")
 // - `config` - the provider settings config that is currently being updated
+// - any other prop from optionComponentProps
 export default [
     {
         key:   "appleAuth",
@@ -26,15 +27,25 @@ export default [
         logo:  "google.svg",
     },
     {
+        key:   "microsoftAuth",
+        title: "Microsoft",
+        logo:  "microsoft.svg",
+        optionsComponent: MicrosoftOptions,
+    },
+    {
+        key:   "yandexAuth",
+        title: "Yandex",
+        logo:  "yandex.svg",
+    },
+    {
         key:   "facebookAuth",
         title: "Facebook",
         logo:  "facebook.svg",
     },
     {
-        key:   "microsoftAuth",
-        title: "Microsoft",
-        logo:  "microsoft.svg",
-        optionsComponent: MicrosoftOptions,
+        key:   "instagramAuth",
+        title: "Instagram",
+        logo:  "instagram.svg",
     },
     {
         key:   "githubAuth",
@@ -46,6 +57,7 @@ export default [
         title: "GitLab",
         logo:  "gitlab.svg",
         optionsComponent: SelfHostedOptions,
+        optionsComponentProps: { title: "Self-hosted endpoints (optional)" },
     },
     {
         key:   "giteeAuth",
@@ -57,6 +69,7 @@ export default [
         title: "Gitea",
         logo:  "gitea.svg",
         optionsComponent: SelfHostedOptions,
+        optionsComponentProps: { title: "Self-hosted endpoints (optional)" },
     },
     {
         key:   "discordAuth",
@@ -74,6 +87,11 @@ export default [
         logo:  "kakao.svg",
     },
     {
+        key:   "vkAuth",
+        title: "VK",
+        logo:  "vk.svg"
+    },
+    {
         key:   "spotifyAuth",
         title: "Spotify",
         logo:  "spotify.svg",
@@ -84,6 +102,11 @@ export default [
         logo:  "twitch.svg",
     },
     {
+        key:   "patreonAuth",
+        title: "Patreon (v2)",
+        logo:  "patreon.svg"
+    },
+    {
         key:   "stravaAuth",
         title: "Strava",
         logo:  "strava.svg",
@@ -92,6 +115,13 @@ export default [
         key:   "livechatAuth",
         title: "LiveChat",
         logo:  "livechat.svg",
+    },
+    {
+        key:   "mailcowAuth",
+        title: "mailcow",
+        logo:  "mailcow.svg",
+        optionsComponent: SelfHostedOptions,
+        optionsComponentProps: { required: true },
     },
     {
         key:   "oidcAuth",
